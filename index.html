@@ -1,1829 +1,1032 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PJUS – Service Desk</title>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>PJUS – Service Desk</title>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* ── ESTRADA TOKENS ─────────────────────────────── */
+:root{
+  --primary:#0061D6; --secondary:#4D5858;
+  --success:#0E8557; --warning:#FEC33C; --danger:#FF4D4F; --info:#0858C5;
+  --gray-100:#DBDEDE; --gray-200:#A5ABAB; --gray-300:#717979; --gray-400:#4D5858;
+  --text-primary:#0A0A0A; --text-secondary:#717979; --text-contrast:#A5ABAB;
+  --shadow-sm:0 2px 8px #0000001a; --shadow-md:0 6px 24px #0000001a; --shadow-lg:0 16px 48px #00000020;
+  --font-title:'Verdana',sans-serif; --font-text:'Lato',sans-serif;
+  --radius:8px; --radius-sm:4px;
+  --sidebar-bg:#3a4349; --sidebar-w:220px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-text);background:#f0f2f5;color:var(--text-primary);font-size:14px;height:100vh;overflow:hidden}
+button{cursor:pointer;font-family:inherit;border:none;background:none}
+input,select,textarea{font-family:inherit}
+a{text-decoration:none;color:inherit}
 
-  <!-- Google Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;600;700;800&family=Verdana&display=swap" rel="stylesheet" />
+/* ── LAYOUT ─────────────────────────────────────── */
+.app{display:flex;height:100vh;overflow:hidden}
 
-  <!-- Recharts + React via CDN -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.min.js"></script>
+/* SIDEBAR */
+.sidebar{
+  width:var(--sidebar-w);min-width:var(--sidebar-w);
+  background:var(--sidebar-bg);display:flex;flex-direction:column;
+  transition:width .22s,min-width .22s;overflow:hidden;z-index:200;flex-shrink:0;
+}
+.sidebar.closed{width:0;min-width:0}
+.sb-logo{display:flex;align-items:center;gap:10px;padding:16px;border-bottom:1px solid rgba(255,255,255,.07);min-height:56px}
+.sb-logo-icon{width:32px;height:32px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sb-logo-icon svg{width:18px;height:18px}
+.sb-logo-text{font-family:var(--font-title);font-weight:700;color:#fff;font-size:18px;white-space:nowrap}
+.sb-user{display:flex;flex-direction:column;align-items:center;padding:18px 14px 14px;border-bottom:1px solid rgba(255,255,255,.07);gap:8px}
+.sb-avatar{width:50px;height:50px;border-radius:50%;background:#5a6369;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sb-name{color:#dde3e6;font-size:12px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px}
+.sb-nav{flex:1;overflow-y:auto;padding:6px 0}
+.sb-nav::-webkit-scrollbar{width:3px}
+.sb-nav::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:3px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 16px;color:#b8c4ca;font-size:13px;cursor:pointer;user-select:none;transition:background .14s,color .14s;white-space:nowrap}
+.nav-item:hover{background:rgba(255,255,255,.07);color:#fff}
+.nav-item.active{background:rgba(0,97,214,.28);color:#fff}
+.nav-ico{width:18px;text-align:center;font-size:15px;flex-shrink:0}
+.nav-lbl{flex:1}
+.nav-arr{font-size:10px;transition:transform .18s;color:#8a9499}
+.nav-arr.open{transform:rotate(180deg)}
+.nav-group{font-size:10px;font-weight:700;color:#7a8a90;text-transform:uppercase;letter-spacing:.6px;padding:5px 16px 3px 46px}
+.nav-sub{padding:8px 16px 8px 46px;color:#9fabb0;font-size:13px;cursor:pointer;transition:background .14s,color .14s;white-space:nowrap}
+.nav-sub:hover{background:rgba(255,255,255,.06);color:#fff}
+.nav-sub.active{color:#fff;font-weight:600}
 
-  <style>
-    /* ═══════════════════════════════════════════
-       ESTRADA DESIGN SYSTEM — TOKENS
-    ═══════════════════════════════════════════ */
-    :root {
-      /* Breakpoints */
-      --breakpoint-sm: 425px;
-      --breakpoint-md: 768px;
-      --breakpoint-lg: 1280px;
+/* MAIN */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 
-      /* Colors */
-      --color-primary: #0061D6;
-      --color-secondary: #4D5858;
-      --color-status-success: #0E8557;
-      --color-status-warning: #FEC33C;
-      --color-status-danger: #FF4D4F;
-      --color-status-info: #0858C5;
-      --color-gray-100: #DBDEDE;
-      --color-gray-200: #A5ABAB;
-      --color-gray-300: #717979;
-      --color-gray-400: #4D5858;
-      --color-inactive: #DBDEDE;
-      --color-text-pjus: #0061D6;
-      --color-text-primary: #0A0A0A;
-      --color-text-secondary: #717979;
-      --color-text-contrast: #A5ABAB;
+/* TOPBAR */
+.topbar{background:#fff;border-bottom:1px solid var(--gray-100);display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:50px;gap:16px;flex-shrink:0;box-shadow:var(--shadow-sm)}
+.topbar-l{display:flex;align-items:center;gap:14px}
+.topbar-r{display:flex;align-items:center;gap:10px}
+.btn-ham{padding:6px;border-radius:var(--radius-sm);color:var(--text-secondary);font-size:20px;line-height:1;transition:background .14s}
+.btn-ham:hover{background:var(--gray-100)}
+.greeting{font-size:13px;color:var(--text-secondary)}
+.greeting b{color:var(--text-primary)}
+.ip{color:var(--text-contrast);font-size:11px}
+.btn-ico{padding:6px;border-radius:var(--radius-sm);color:var(--text-secondary);font-size:17px;transition:background .14s;line-height:1;display:flex;align-items:center}
+.btn-ico:hover{background:var(--gray-100)}
+.btn-sair{color:var(--danger);font-size:13px;font-weight:700;padding:4px 8px;border-radius:var(--radius-sm);display:flex;align-items:center;gap:4px;transition:background .14s}
+.btn-sair:hover{background:#fff0f0}
 
-      /* Shadows */
-      --shadow-sm: 0px 4px 4px 0px #00000012;
-      --shadow-md: 0px 22px 10px 0px #00000012;
-      --shadow-lg: 0px 30px 60px 0px #00000012;
+/* SUBTOOLBAR */
+.subt{background:#fff;border-bottom:1px solid var(--gray-100);display:flex;align-items:center;padding:6px 24px;gap:14px;flex-shrink:0;flex-wrap:wrap}
+.subt-l{display:flex;align-items:center;gap:10px;flex:1;flex-wrap:wrap}
+.subt-r{display:flex;align-items:center;gap:8px}
+.subt-lbl{font-size:12px;color:var(--text-secondary);white-space:nowrap}
+.subt-input{border:1px solid var(--gray-100);border-radius:var(--radius-sm);padding:4px 10px;font-size:13px;color:var(--text-primary);outline:none;width:210px;transition:border-color .14s}
+.subt-input:focus{border-color:var(--primary)}
+.subt-select{border:1px solid var(--gray-100);border-radius:var(--radius-sm);padding:4px 10px;font-size:13px;background:#fff;outline:none;cursor:pointer}
+.btn-lnk{color:var(--primary);font-size:13px;display:flex;align-items:center;gap:4px;padding:4px 8px;border-radius:var(--radius-sm);transition:background .14s}
+.btn-lnk:hover{background:#e8f0fe}
 
-      /* Sizes */
-      --size-1: 12px;
-      --size-2: 14px;
-      --size-3: 16px;
-      --size-4: 20px;
-      --size-5: 24px;
-      --size-6: 28px;
-      --size-7: 40px;
+/* BUTTONS (Estrada) */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 16px;border-radius:var(--radius-sm);font-size:14px;font-weight:700;border:1px solid transparent;cursor:pointer;transition:all .15s;white-space:nowrap}
+.btn-primary{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn-primary:hover{background:#0051b5}
+.btn-secondary{background:#fff;color:var(--secondary);border-color:var(--secondary)}
+.btn-secondary:hover{color:var(--primary);border-color:var(--primary)}
+.btn-danger{background:var(--danger);color:#fff;border-color:var(--danger)}
+.btn-success{background:var(--success);color:#fff;border-color:var(--success)}
+.btn-sm{padding:4px 12px;font-size:13px}
+.btn-full{width:100%}
+.btn:disabled{opacity:.5;cursor:not-allowed}
 
-      /* Spacing */
-      --spacing-none: 0px;
-      --spacing-sm: 4px;
-      --spacing-md: 8px;
-      --spacing-lg: 16px;
-      --spacing-xl: 24px;
-      --spacing-xxl: 32px;
+/* CONTENT */
+.content{flex:1;overflow-y:auto;padding:22px;scroll-behavior:smooth}
+.content::-webkit-scrollbar{width:6px}
+.content::-webkit-scrollbar-thumb{background:var(--gray-100);border-radius:4px}
 
-      /* Font Weights */
-      --weight-regular: 400;
-      --weight-semi-bold: 600;
-      --weight-bold: 700;
-      --weight-extra-bold: 800;
+/* PAGE SECTIONS */
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:10px;border-bottom:2px solid var(--text-primary)}
+.page-title{font-family:var(--font-title);font-weight:700;font-size:18px}
+.section{margin-bottom:28px}
+.section-title{font-family:var(--font-title);font-weight:700;font-size:14px;margin-bottom:14px;padding-bottom:6px;border-bottom:1px solid var(--text-primary)}
 
-      /* Fonts */
-      --font-title: 'Verdana', sans-serif;
-      --font-text: 'Lato', sans-serif;
-    }
+/* GRID */
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.g2{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.g2-1{display:grid;grid-template-columns:2fr 1fr;gap:20px}
+@media(max-width:900px){.g3{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){.g3,.g2,.g2-1{grid-template-columns:1fr}}
 
-    /* ═══════════════════════════════════════════
-       RESET & BASE
-    ═══════════════════════════════════════════ */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: var(--font-text); background: #f4f5f7; color: var(--color-text-primary); font-size: var(--size-2); }
-    button { cursor: pointer; font-family: var(--font-text); }
-    input, select, textarea { font-family: var(--font-text); }
-    a { text-decoration: none; color: inherit; }
-    ul { list-style: none; }
+/* KPI CARD */
+.kpi{border-radius:var(--radius);overflow:hidden;background:#fff;box-shadow:var(--shadow-sm)}
+.kpi-h{background:#3a4349;color:#fff;padding:8px 14px;font-size:12px;font-weight:600;text-align:center;line-height:1.3}
+.kpi-b{padding:14px;display:flex;align-items:center;justify-content:center;min-height:68px}
+.kpi-v{font-size:30px;font-weight:700;font-family:var(--font-title)}
+.c-danger{color:var(--danger)} .c-warning{color:var(--warning)} .c-success{color:var(--success)} .c-info{color:var(--info)}
 
-    /* ═══════════════════════════════════════════
-       LAYOUT
-    ═══════════════════════════════════════════ */
-    .app { display: flex; height: 100vh; overflow: hidden; }
+/* CARD (Estrada) */
+.card{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:16px}
+.card-bordered{border:1px solid var(--gray-100)}
+.chart-card{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden}
+.chart-h{background:#3a4349;color:#fff;padding:8px 14px;font-size:12px;font-weight:600;text-align:center}
+.chart-b{padding:14px}
 
-    /* SIDEBAR */
-    .sidebar {
-      width: 220px;
-      min-width: 220px;
-      background: #3D4549;
-      display: flex;
-      flex-direction: column;
-      transition: width 0.25s ease, min-width 0.25s ease;
-      overflow: hidden;
-      z-index: 100;
-    }
-    .sidebar.collapsed { width: 0; min-width: 0; }
+/* FORM (Estrada) */
+.form-group{margin-bottom:14px}
+.form-label{display:block;font-size:12px;color:var(--text-secondary);margin-bottom:6px}
+.form-control{padding:5px 14px;border-radius:var(--radius-sm);border:1px solid var(--gray-100);font-size:13px;display:block;width:100%;outline:none;transition:border-color .14s;font-family:inherit;line-height:1.5}
+.form-control:focus{border-color:var(--primary)}
+.form-control[readonly]{background:var(--gray-100)}
+.form-control.invalid{border-color:var(--danger)}
+textarea.form-control{resize:vertical;min-height:80px}
+.input-error{color:var(--danger);font-size:11px;margin-top:4px;display:block}
+.input-group{display:flex}
+.input-group .form-control{border-radius:var(--radius-sm) 0 0 var(--radius-sm)}
+.input-group .btn{border-radius:0 var(--radius-sm) var(--radius-sm) 0}
 
-    .sidebar-logo {
-      padding: var(--spacing-lg) var(--spacing-lg);
-      display: flex;
-      align-items: center;
-      gap: var(--spacing-md);
-      border-bottom: 1px solid rgba(255,255,255,0.08);
-      min-height: 64px;
-    }
-    .sidebar-logo svg { flex-shrink: 0; }
-    .sidebar-logo-text {
-      font-family: var(--font-title);
-      font-weight: var(--weight-bold);
-      color: #fff;
-      font-size: var(--size-5);
-      letter-spacing: -0.5px;
-      white-space: nowrap;
-    }
+/* TABLE */
+.table-wrap{overflow-x:auto;border-radius:var(--radius);box-shadow:var(--shadow-sm)}
+table{width:100%;border-collapse:collapse;background:#fff}
+thead tr{background:#3a4349;color:#fff}
+thead th{padding:9px 14px;font-size:12px;font-weight:600;text-align:left;white-space:nowrap}
+tbody tr{border-bottom:1px solid var(--gray-100);transition:background .1s}
+tbody tr:hover{background:#f8f9fa}
+tbody tr:last-child{border:none}
+td{padding:9px 14px;font-size:13px}
 
-    .sidebar-user {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: var(--spacing-xl) var(--spacing-lg) var(--spacing-lg);
-      gap: var(--spacing-md);
-      border-bottom: 1px solid rgba(255,255,255,0.08);
-    }
-    .sidebar-avatar {
-      width: 52px; height: 52px;
-      border-radius: 50%;
-      background: #5a6369;
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-    }
-    .sidebar-user-name {
-      color: #e0e4e6;
-      font-size: var(--size-2);
-      text-align: center;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 180px;
-    }
+/* BADGE */
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;white-space:nowrap}
+.b-danger{background:#fff0f0;color:var(--danger)}
+.b-success{background:#e8f5ef;color:var(--success)}
+.b-warning{background:#fff8e6;color:#a07700}
+.b-info{background:#e8f0fe;color:var(--info)}
+.b-gray{background:var(--gray-100);color:var(--text-secondary)}
 
-    .sidebar-nav { flex: 1; overflow-y: auto; padding: var(--spacing-md) 0; }
-    .sidebar-nav::-webkit-scrollbar { width: 4px; }
-    .sidebar-nav::-webkit-scrollbar-track { background: transparent; }
-    .sidebar-nav::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
+/* TABS (Estrada) */
+.tabs{display:flex;gap:4px;border-bottom:2px solid var(--gray-100);margin-bottom:18px}
+.btn-tab{background:transparent;color:var(--text-secondary);padding:7px 14px;font-size:14px;border:none;cursor:pointer;border-radius:var(--radius-sm) var(--radius-sm) 0 0;margin-bottom:-2px;font-family:inherit;transition:color .14s;border-bottom:2px solid transparent}
+.btn-tab:hover{color:var(--primary)}
+.btn-tab.active{color:var(--primary);font-weight:700;border-bottom:2px solid var(--primary)}
 
-    .nav-item {
-      display: flex;
-      align-items: center;
-      gap: var(--spacing-md);
-      padding: 10px var(--spacing-lg);
-      color: #c8d0d4;
-      font-size: var(--size-2);
-      cursor: pointer;
-      transition: background 0.15s, color 0.15s;
-      white-space: nowrap;
-      user-select: none;
-    }
-    .nav-item:hover { background: rgba(255,255,255,0.07); color: #fff; }
-    .nav-item.active { background: rgba(0,97,214,0.25); color: #fff; }
-    .nav-item.active .nav-icon { color: var(--color-primary); }
-    .nav-icon { font-size: 17px; flex-shrink: 0; width: 20px; text-align: center; }
-    .nav-label { flex: 1; }
-    .nav-chevron { font-size: 12px; transition: transform 0.2s; }
-    .nav-chevron.open { transform: rotate(180deg); }
+/* ALERT */
+.alert{padding:12px 14px;border-radius:var(--radius);font-size:13px;margin-bottom:14px;display:flex;align-items:flex-start;gap:10px;line-height:1.5}
+.alert-info{background:#e8f0fe;color:var(--info);border-left:4px solid var(--info)}
+.alert-success{background:#e8f5ef;color:var(--success);border-left:4px solid var(--success)}
+.alert-danger{background:#fff0f0;color:var(--danger);border-left:4px solid var(--danger)}
+.alert-warning{background:#fff8e6;color:#a07700;border-left:4px solid var(--warning)}
 
-    .nav-submenu { overflow: hidden; }
-    .nav-group-label {
-      padding: 6px var(--spacing-lg) 4px 48px;
-      color: #8a9499;
-      font-size: var(--size-1);
-      font-weight: var(--weight-semi-bold);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-    .nav-subitem {
-      padding: 8px var(--spacing-lg) 8px 48px;
-      color: #adb5ba;
-      font-size: var(--size-2);
-      cursor: pointer;
-      transition: background 0.15s, color 0.15s;
-      white-space: nowrap;
-    }
-    .nav-subitem:hover { background: rgba(255,255,255,0.06); color: #fff; }
-    .nav-subitem.active { color: #fff; font-weight: var(--weight-semi-bold); }
+/* MODAL */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:900;padding:16px;opacity:0;pointer-events:none;transition:opacity .2s}
+.overlay.show{opacity:1;pointer-events:all}
+.modal{background:#fff;border-radius:var(--radius);width:100%;max-width:540px;max-height:88vh;overflow-y:auto;box-shadow:var(--shadow-lg);transform:translateY(20px);transition:transform .2s}
+.overlay.show .modal{transform:translateY(0)}
+.modal-hd{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--gray-100)}
+.modal-title{font-family:var(--font-title);font-weight:700;font-size:14px}
+.btn-x{font-size:18px;color:var(--text-secondary);padding:4px;border-radius:var(--radius-sm);line-height:1}
+.btn-x:hover{background:var(--gray-100)}
+.modal-bd{padding:20px}
+.modal-ft{padding:12px 20px;border-top:1px solid var(--gray-100);display:flex;justify-content:flex-end;gap:8px}
 
-    /* MAIN */
-    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+/* STEPPER */
+.stepper{display:flex;align-items:center;margin-bottom:26px}
+.step-wrap{display:flex;align-items:center;gap:8px}
+.step-line{flex:1;height:2px;background:var(--gray-100);margin:0 6px}
+.step-line.done{background:var(--success)}
+.step-circle{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0}
+.sc-done{background:var(--success);color:#fff}
+.sc-active{background:var(--primary);color:#fff}
+.sc-pending{background:var(--gray-100);color:var(--text-secondary)}
+.step-lbl{font-size:12px;color:var(--text-secondary);white-space:nowrap}
+.step-lbl.active{color:var(--primary);font-weight:600}
 
-    /* TOPBAR */
-    .topbar {
-      background: #fff;
-      border-bottom: 1px solid var(--color-gray-100);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 var(--spacing-xl);
-      height: 48px;
-      gap: var(--spacing-lg);
-      flex-shrink: 0;
-      box-shadow: var(--shadow-sm);
-    }
-    .topbar-left { display: flex; align-items: center; gap: var(--spacing-lg); }
-    .topbar-right { display: flex; align-items: center; gap: var(--spacing-lg); }
+/* PROGRESS */
+.progress{background:var(--gray-100);border-radius:99px;height:7px;overflow:hidden}
+.progress-bar{height:100%;border-radius:99px;transition:width .35s}
+.pb-primary{background:var(--primary)} .pb-success{background:var(--success)} .pb-warning{background:var(--warning)} .pb-danger{background:var(--danger)}
 
-    .hamburger {
-      background: none; border: none; padding: 6px;
-      color: var(--color-text-secondary); font-size: 20px;
-      display: flex; align-items: center;
-      border-radius: 4px;
-      transition: background 0.15s;
-    }
-    .hamburger:hover { background: var(--color-gray-100); }
+/* STARS */
+.stars{display:flex;gap:3px;align-items:center}
+.star{font-size:22px;cursor:pointer;color:var(--gray-100);transition:color .1s;line-height:1}
+.star.on{color:var(--warning)}
 
-    .topbar-greeting {
-      font-size: var(--size-2);
-      color: var(--color-text-secondary);
-      white-space: nowrap;
-    }
-    .topbar-ip { color: var(--color-text-contrast); font-size: var(--size-1); }
+/* PAGINATION */
+.pager{display:flex;gap:5px;justify-content:center;margin-top:14px}
+.pg{width:30px;height:30px;border-radius:var(--radius-sm);border:1px solid var(--gray-100);background:#fff;font-size:13px;color:var(--text-secondary);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .14s}
+.pg:hover{border-color:var(--primary);color:var(--primary)}
+.pg.active{background:var(--primary);color:#fff;border-color:var(--primary)}
 
-    .topbar-icon-btn {
-      background: none; border: none; padding: 6px;
-      color: var(--color-text-secondary); font-size: 18px;
-      border-radius: 4px; transition: background 0.15s;
-      display: flex; align-items: center;
-    }
-    .topbar-icon-btn:hover { background: var(--color-gray-100); }
+/* STATUS DOT */
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.dot-s{background:var(--success)} .dot-w{background:var(--warning)} .dot-d{background:var(--danger)}
 
-    .btn-sair {
-      background: none; border: none;
-      color: var(--color-status-danger);
-      font-size: var(--size-2);
-      font-weight: var(--weight-semi-bold);
-      display: flex; align-items: center; gap: 4px;
-      padding: 4px 8px; border-radius: 4px;
-      transition: background 0.15s;
-    }
-    .btn-sair:hover { background: #fff0f0; }
+/* CALENDAR */
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.cal-hd{text-align:center;font-size:11px;font-weight:600;color:var(--text-secondary);padding:3px}
+.cal-day{aspect-ratio:1;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer;transition:background .12s;position:relative}
+.cal-day:hover{background:#e8f0fe}
+.cal-day.today{background:var(--primary);color:#fff;font-weight:700}
+.cal-day.other{color:var(--gray-200)}
+.cal-day.has-ev::after{content:'';position:absolute;bottom:3px;width:5px;height:5px;border-radius:50%;background:var(--warning)}
+.cal-day.today.has-ev::after{background:#fff}
 
-    /* SUBTOOLBAR */
-    .subtoolbar {
-      background: #fff;
-      border-bottom: 1px solid var(--color-gray-100);
-      display: flex;
-      align-items: center;
-      padding: 6px var(--spacing-xl);
-      gap: var(--spacing-lg);
-      flex-shrink: 0;
-      flex-wrap: wrap;
-    }
-    .subtoolbar-left { display: flex; align-items: center; gap: var(--spacing-md); flex: 1; flex-wrap: wrap; }
-    .subtoolbar-right { display: flex; align-items: center; gap: var(--spacing-md); }
+/* TOAST */
+.toast-wrap{position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column;gap:7px;z-index:9999}
+.toast{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow-md);padding:11px 14px;display:flex;align-items:center;gap:9px;min-width:260px;max-width:360px;font-size:13px;border-left:4px solid var(--primary);animation:slideIn .22s ease;cursor:pointer}
+.toast.s{border-color:var(--success)}
+.toast.e{border-color:var(--danger)}
+@keyframes slideIn{from{transform:translateX(110%);opacity:0}to{transform:translateX(0);opacity:1}}
+.toast-ico{font-size:16px}
 
-    .subtoolbar-label { font-size: var(--size-2); color: var(--color-text-secondary); white-space: nowrap; }
-    .subtoolbar-input {
-      border: 1px solid var(--color-gray-100); border-radius: 4px;
-      padding: 4px 10px; font-size: var(--size-2);
-      color: var(--color-text-primary); outline: none;
-      transition: border-color 0.15s;
-      width: 220px;
-    }
-    .subtoolbar-input:focus { border-color: var(--color-primary); }
-    .subtoolbar-select {
-      border: 1px solid var(--color-gray-100); border-radius: 4px;
-      padding: 4px 10px; font-size: var(--size-2);
-      color: var(--color-text-primary); outline: none;
-      background: #fff; cursor: pointer;
-      transition: border-color 0.15s;
-    }
-    .subtoolbar-select:focus { border-color: var(--color-primary); }
+/* EMPTY STATE */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:44px 20px;gap:12px;color:var(--text-secondary)}
+.empty-ico{font-size:44px;opacity:.35}
+.empty-txt{font-size:14px}
 
-    .btn-link {
-      background: none; border: none;
-      color: var(--color-primary); font-size: var(--size-2);
-      display: flex; align-items: center; gap: 4px;
-      padding: 4px 8px; border-radius: 4px;
-      transition: background 0.15s;
-    }
-    .btn-link:hover { background: #e8f0fe; }
-
-    /* BTN (Estrada) */
-    .btn {
-      width: fit-content;
-      padding: var(--spacing-md) var(--spacing-lg);
-      border-radius: 4px;
-      font-size: var(--size-3);
-      font-weight: 700;
-      border: 1px solid transparent;
-      box-sizing: border-box;
-      display: inline-flex; align-items: center; gap: 6px;
-    }
-    .btn:not(:disabled):hover { cursor: pointer; }
-    .btn-primary {
-      background-color: var(--color-primary);
-      border-color: var(--color-primary);
-      color: white;
-    }
-    .btn-primary:hover { background-color: #0051b5; border-color: #0051b5; }
-    .btn-secondary {
-      background-color: white !important;
-      color: var(--color-secondary);
-      border-color: var(--color-secondary);
-    }
-    .btn-secondary:hover { color: var(--color-primary); border-color: var(--color-primary); }
-    .btn-sm { padding: var(--spacing-sm) var(--spacing-lg); font-size: var(--size-2); }
-    .btn-danger { background-color: var(--color-status-danger); color: white; border-color: var(--color-status-danger); }
-    .btn-danger:hover { background-color: #e03030; }
-    .btn-success { background-color: var(--color-status-success); color: white; border-color: var(--color-status-success); }
-
-    /* CONTENT */
-    .content { flex: 1; overflow-y: auto; padding: var(--spacing-xl); }
-    .content::-webkit-scrollbar { width: 6px; }
-    .content::-webkit-scrollbar-track { background: transparent; }
-    .content::-webkit-scrollbar-thumb { background: var(--color-gray-100); border-radius: 4px; }
-
-    /* PAGE HEADER */
-    .page-header {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: var(--spacing-xl);
-      padding-bottom: var(--spacing-md);
-      border-bottom: 2px solid var(--color-text-primary);
-    }
-    .page-title {
-      font-family: var(--font-title);
-      font-weight: var(--weight-bold);
-      font-size: var(--size-4);
-      color: var(--color-text-primary);
-    }
-
-    /* SECTION */
-    .section { margin-bottom: var(--spacing-xxl); }
-    .section-title {
-      font-family: var(--font-title);
-      font-weight: var(--weight-bold);
-      font-size: var(--size-3);
-      color: var(--color-text-primary);
-      margin-bottom: var(--spacing-lg);
-      padding-bottom: var(--spacing-sm);
-      border-bottom: 1px solid var(--color-text-primary);
-    }
-
-    /* GRID */
-    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--spacing-lg); }
-    .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--spacing-lg); }
-    @media (max-width: 900px) {
-      .grid-3 { grid-template-columns: repeat(2, 1fr); }
-    }
-    @media (max-width: 600px) {
-      .grid-3, .grid-2 { grid-template-columns: 1fr; }
-    }
-
-    /* KPI CARD (Estrada) */
-    .kpi-card {
-      border-radius: 8px;
-      overflow: hidden;
-      background: #fff;
-      box-shadow: var(--shadow-sm);
-    }
-    .kpi-card-header {
-      background: #3D4549;
-      color: #fff;
-      padding: var(--spacing-md) var(--spacing-lg);
-      font-size: var(--size-2);
-      font-weight: var(--weight-semi-bold);
-      text-align: center;
-    }
-    .kpi-card-body {
-      padding: var(--spacing-lg);
-      display: flex; align-items: center; justify-content: center;
-      min-height: 72px;
-    }
-    .kpi-value {
-      font-size: 32px;
-      font-weight: var(--weight-bold);
-      font-family: var(--font-title);
-    }
-    .kpi-danger { color: var(--color-status-danger); }
-    .kpi-warning { color: var(--color-status-warning); }
-    .kpi-success { color: var(--color-status-success); }
-    .kpi-info { color: var(--color-status-info); }
-
-    /* CHART CARD */
-    .chart-card {
-      border-radius: 8px;
-      overflow: hidden;
-      background: #fff;
-      box-shadow: var(--shadow-sm);
-    }
-    .chart-card-header {
-      background: #3D4549;
-      color: #fff;
-      padding: var(--spacing-md) var(--spacing-lg);
-      font-size: var(--size-2);
-      font-weight: var(--weight-semi-bold);
-      text-align: center;
-    }
-    .chart-card-body { padding: var(--spacing-lg); }
-
-    /* FORM (Estrada) */
-    .form-group { margin-bottom: var(--spacing-lg); }
-    .form-label {
-      display: block;
-      font-size: var(--size-1);
-      color: var(--color-text-secondary);
-      line-height: 18px;
-      margin-bottom: var(--spacing-md);
-    }
-    .form-control {
-      padding: var(--spacing-sm) var(--spacing-lg);
-      border-radius: 4px;
-      border: 1px solid var(--color-gray-100);
-      font-size: var(--size-2);
-      display: block; width: 100%;
-      box-sizing: border-box; outline: none;
-      box-shadow: none; font-weight: 400;
-      line-height: 21px; font-family: var(--font-text);
-      transition: border-color 0.15s;
-    }
-    .form-control:focus { border-color: var(--color-primary); }
-    .form-control[readonly] { background: var(--color-gray-100); }
-    .form-control.invalid { border-color: var(--color-status-danger); }
-    .input-error { color: var(--color-status-danger); font-size: var(--size-1); margin-top: 4px; }
-    textarea.form-control { resize: vertical; min-height: 100px; }
-    select.form-control { cursor: pointer; }
-
-    /* TABLE */
-    .table-wrapper { overflow-x: auto; border-radius: 8px; box-shadow: var(--shadow-sm); }
-    table { width: 100%; border-collapse: collapse; background: #fff; }
-    thead tr { background: #3D4549; color: #fff; }
-    thead th {
-      padding: var(--spacing-md) var(--spacing-lg);
-      font-size: var(--size-2); font-weight: var(--weight-semi-bold);
-      text-align: left; white-space: nowrap;
-    }
-    tbody tr { border-bottom: 1px solid var(--color-gray-100); transition: background 0.12s; }
-    tbody tr:hover { background: #f8f9fa; }
-    tbody tr:last-child { border-bottom: none; }
-    td {
-      padding: var(--spacing-md) var(--spacing-lg);
-      font-size: var(--size-2); color: var(--color-text-primary);
-    }
-
-    /* BADGE */
-    .badge {
-      display: inline-flex; align-items: center;
-      padding: 2px 8px; border-radius: 12px;
-      font-size: var(--size-1); font-weight: var(--weight-semi-bold);
-    }
-    .badge-danger { background: #fff0f0; color: var(--color-status-danger); }
-    .badge-success { background: #e8f5ef; color: var(--color-status-success); }
-    .badge-warning { background: #fff8e6; color: #b88b00; }
-    .badge-info { background: #e8f0fe; color: var(--color-status-info); }
-    .badge-secondary { background: var(--color-gray-100); color: var(--color-text-secondary); }
-
-    /* TABS (Estrada) */
-    .tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--color-gray-100); margin-bottom: var(--spacing-xl); }
-    .btn-tab {
-      background: transparent; color: var(--color-text-secondary);
-      padding: var(--spacing-md) var(--spacing-lg);
-      font-size: var(--size-3) !important;
-      border: none; cursor: pointer;
-      border-radius: 4px 4px 0 0; margin-bottom: -2px;
-      font-family: var(--font-text);
-      transition: color 0.15s, background 0.15s;
-      border-bottom: 2px solid transparent;
-    }
-    .btn-tab:hover { color: var(--color-primary); background: #f0f4ff; }
-    .btn-tab.active {
-      color: var(--color-primary); font-weight: var(--weight-bold);
-      border-bottom: 2px solid var(--color-primary);
-    }
-
-    /* CARD (Estrada) */
-    .card { padding: 16px; border: none; border-radius: 8px; background: #fff; }
-    .card-bordered { border: 1px solid var(--color-gray-100); }
-    .card.shadow-sm { box-shadow: var(--shadow-sm); }
-    .card.shadow-md { box-shadow: var(--shadow-md); }
-
-    /* ALERT */
-    .alert {
-      padding: var(--spacing-lg); border-radius: 8px;
-      font-size: var(--size-2); margin-bottom: var(--spacing-lg);
-      display: flex; align-items: flex-start; gap: var(--spacing-md);
-    }
-    .alert-info { background: #e8f0fe; color: var(--color-status-info); border-left: 4px solid var(--color-status-info); }
-    .alert-success { background: #e8f5ef; color: var(--color-status-success); border-left: 4px solid var(--color-status-success); }
-    .alert-danger { background: #fff0f0; color: var(--color-status-danger); border-left: 4px solid var(--color-status-danger); }
-    .alert-warning { background: #fff8e6; color: #b88b00; border-left: 4px solid var(--color-status-warning); }
-
-    /* MODAL OVERLAY */
-    .modal-overlay {
-      position: fixed; inset: 0;
-      background: rgba(0,0,0,0.45);
-      display: flex; align-items: center; justify-content: center;
-      z-index: 999; padding: var(--spacing-lg);
-    }
-    .modal {
-      background: #fff; border-radius: 8px;
-      width: 100%; max-width: 560px;
-      max-height: 90vh; overflow-y: auto;
-      box-shadow: var(--shadow-lg);
-    }
-    .modal-header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: var(--spacing-lg) var(--spacing-xl);
-      border-bottom: 1px solid var(--color-gray-100);
-    }
-    .modal-title {
-      font-family: var(--font-title); font-weight: var(--weight-bold);
-      font-size: var(--size-3);
-    }
-    .modal-body { padding: var(--spacing-xl); }
-    .modal-footer {
-      padding: var(--spacing-lg) var(--spacing-xl);
-      border-top: 1px solid var(--color-gray-100);
-      display: flex; justify-content: flex-end; gap: var(--spacing-md);
-    }
-    .btn-close {
-      background: none; border: none; font-size: 20px;
-      color: var(--color-text-secondary); padding: 4px;
-      border-radius: 4px; line-height: 1;
-    }
-    .btn-close:hover { background: var(--color-gray-100); }
-
-    /* STEPPER */
-    .stepper { display: flex; align-items: center; margin-bottom: var(--spacing-xxl); gap: 0; }
-    .step {
-      display: flex; align-items: center; gap: var(--spacing-md); flex: 1;
-    }
-    .step:last-child { flex: 0; }
-    .step-circle {
-      width: 32px; height: 32px; border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-weight: var(--weight-bold); font-size: var(--size-2);
-      flex-shrink: 0;
-    }
-    .step-circle.done { background: var(--color-status-success); color: #fff; }
-    .step-circle.active { background: var(--color-primary); color: #fff; }
-    .step-circle.pending { background: var(--color-gray-100); color: var(--color-text-secondary); }
-    .step-label { font-size: var(--size-2); color: var(--color-text-secondary); white-space: nowrap; }
-    .step-label.active { color: var(--color-primary); font-weight: var(--weight-semi-bold); }
-    .step-line { flex: 1; height: 2px; background: var(--color-gray-100); margin: 0 8px; }
-    .step-line.done { background: var(--color-status-success); }
-
-    /* PAGINATION */
-    .pagination { display: flex; align-items: center; gap: var(--spacing-sm); margin-top: var(--spacing-lg); justify-content: center; }
-    .page-btn {
-      width: 32px; height: 32px; border-radius: 4px;
-      border: 1px solid var(--color-gray-100); background: #fff;
-      font-size: var(--size-2); color: var(--color-text-secondary);
-      display: flex; align-items: center; justify-content: center;
-      transition: all 0.15s;
-    }
-    .page-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
-    .page-btn.active { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
-
-    /* RATING STARS */
-    .stars { display: flex; gap: 4px; }
-    .star { font-size: 24px; cursor: pointer; transition: color 0.1s; color: var(--color-gray-100); }
-    .star.filled { color: var(--color-status-warning); }
-    .star:hover { color: var(--color-status-warning); }
-
-    /* SPINNER */
-    .spinner {
-      width: 20px; height: 20px;
-      border: 3px solid var(--color-gray-100);
-      border-top-color: var(--color-primary);
-      border-radius: 50%; animation: spin 0.7s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* EMPTY STATE */
-    .empty-state {
-      display: flex; flex-direction: column; align-items: center;
-      justify-content: center; padding: 48px var(--spacing-xl);
-      gap: var(--spacing-lg); color: var(--color-text-secondary);
-    }
-    .empty-state-icon { font-size: 48px; opacity: 0.4; }
-    .empty-state-text { font-size: var(--size-3); text-align: center; }
-
-    /* TOOLTIP */
-    [title] { position: relative; }
-
-    /* DIVIDER */
-    .divider { border: none; border-top: 1px solid var(--color-gray-100); margin: var(--spacing-lg) 0; }
-
-    /* UTILS */
-    .d-flex { display: flex; }
-    .align-center { align-items: center; }
-    .justify-between { justify-content: space-between; }
-    .gap-sm { gap: var(--spacing-sm); }
-    .gap-md { gap: var(--spacing-md); }
-    .gap-lg { gap: var(--spacing-lg); }
-    .mb-sm { margin-bottom: var(--spacing-sm); }
-    .mb-md { margin-bottom: var(--spacing-md); }
-    .mb-lg { margin-bottom: var(--spacing-lg); }
-    .mb-xl { margin-bottom: var(--spacing-xl); }
-    .mt-lg { margin-top: var(--spacing-lg); }
-    .mt-xl { margin-top: var(--spacing-xl); }
-    .text-center { text-align: center; }
-    .w-full { width: 100%; }
-    .flex-1 { flex: 1; }
-    .text-sm { font-size: var(--size-2); }
-    .text-xs { font-size: var(--size-1); }
-    .text-muted { color: var(--color-text-secondary); }
-    .text-danger { color: var(--color-status-danger) !important; }
-    .text-success { color: var(--color-status-success) !important; }
-    .text-warning { color: var(--color-status-warning) !important; }
-    .text-info { color: var(--color-status-info) !important; }
-    .text-pjus { color: var(--color-text-pjus) !important; }
-    .font-bold { font-weight: var(--weight-bold); }
-
-    /* NOTIFICATION TOAST */
-    .toast-container {
-      position: fixed; bottom: 24px; right: 24px;
-      display: flex; flex-direction: column; gap: 8px; z-index: 9999;
-    }
-    .toast {
-      background: #fff; border-radius: 8px;
-      box-shadow: var(--shadow-md); padding: 12px 16px;
-      display: flex; align-items: center; gap: 10px;
-      min-width: 280px; max-width: 380px;
-      animation: slideIn 0.25s ease;
-      border-left: 4px solid var(--color-primary);
-    }
-    .toast.success { border-color: var(--color-status-success); }
-    .toast.error { border-color: var(--color-status-danger); }
-    @keyframes slideIn { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-
-    /* CALENDAR */
-    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
-    .cal-day {
-      aspect-ratio: 1; border-radius: 4px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: var(--size-2); cursor: pointer;
-      transition: background 0.12s;
-    }
-    .cal-day:hover { background: #e8f0fe; }
-    .cal-day.today { background: var(--color-primary); color: #fff; font-weight: var(--weight-bold); }
-    .cal-day.has-event { position: relative; }
-    .cal-day.has-event::after {
-      content: ''; position: absolute; bottom: 3px;
-      width: 5px; height: 5px; border-radius: 50%;
-      background: var(--color-status-warning);
-    }
-    .cal-day.other-month { color: var(--color-gray-200); }
-    .cal-header { text-align: center; font-weight: var(--weight-semi-bold); font-size: var(--size-1); color: var(--color-text-secondary); padding: 4px; }
-
-    /* SEARCH HIGHLIGHT */
-    mark { background: #fff3cd; padding: 0 2px; border-radius: 2px; }
-
-    /* PROGRESS BAR */
-    .progress { background: var(--color-gray-100); border-radius: 99px; height: 8px; overflow: hidden; }
-    .progress-bar { height: 100%; border-radius: 99px; transition: width 0.4s; }
-    .progress-bar.primary { background: var(--color-primary); }
-    .progress-bar.success { background: var(--color-status-success); }
-    .progress-bar.warning { background: var(--color-status-warning); }
-    .progress-bar.danger { background: var(--color-status-danger); }
-
-    /* STATUS DOT */
-    .status-dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      display: inline-block; flex-shrink: 0;
-    }
-    .status-dot.success { background: var(--color-status-success); }
-    .status-dot.warning { background: var(--color-status-warning); }
-    .status-dot.danger { background: var(--color-status-danger); }
-    .status-dot.info { background: var(--color-status-info); }
-
-    /* INPUT GROUP */
-    .input-group { display: flex; }
-    .input-group .form-control { border-radius: 4px 0 0 4px; }
-    .input-group .btn { border-radius: 0 4px 4px 0; white-space: nowrap; }
-
-    /* SIDEBAR ANIMATION FOR OVERLAY on mobile */
-    @media (max-width: 768px) {
-      .sidebar { position: fixed; height: 100vh; left: 0; top: 0; }
-      .sidebar-overlay {
-        position: fixed; inset: 0; background: rgba(0,0,0,0.4);
-        z-index: 99; display: none;
-      }
-      .sidebar-overlay.visible { display: block; }
-    }
-  </style>
+/* UTILS */
+.flex{display:flex} .ai{align-items:center} .jb{justify-content:space-between} .je{justify-content:flex-end}
+.gap-sm{gap:6px} .gap-md{gap:10px} .gap-lg{gap:16px}
+.mb-sm{margin-bottom:6px} .mb-md{margin-bottom:10px} .mb-lg{margin-bottom:16px} .mb-xl{margin-bottom:22px}
+.mt-md{margin-top:10px} .mt-lg{margin-top:16px} .mt-xl{margin-top:22px}
+.bold{font-weight:700} .semi{font-weight:600}
+.text-muted{color:var(--text-secondary)} .text-xs{font-size:11px} .text-sm{font-size:13px}
+.text-pjus{color:var(--primary)} .text-danger{color:var(--danger)} .text-success{color:var(--success)}
+.w-full{width:100%} .hr{border:none;border-top:1px solid var(--gray-100);margin:14px 0}
+.detail-grid{display:grid;grid-template-columns:130px 1fr;gap:9px 14px;font-size:13px}
+.hidden{display:none!important}
+</style>
 </head>
 <body>
-  <div id="root"></div>
+<div class="app">
 
-  <script type="text/babel">
-    const { useState, useCallback, useMemo, useEffect, useRef } = React;
-    const { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } = Recharts;
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-logo">
+      <div class="sb-logo-icon">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z" fill="white"/></svg>
+      </div>
+      <span class="sb-logo-text">PJUS</span>
+    </div>
+    <div class="sb-user">
+      <div class="sb-avatar">
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+          <circle cx="14" cy="10" r="5" fill="#9aabb0"/>
+          <ellipse cx="14" cy="24" rx="9" ry="6" fill="#9aabb0"/>
+        </svg>
+      </div>
+      <span class="sb-name">Igor Vilar de Almeida Costa</span>
+    </div>
+    <nav class="sb-nav">
+      <div class="nav-item" data-page="ajuda" onclick="navigate('ajuda')">
+        <span class="nav-ico">❓</span><span class="nav-lbl">Ajuda</span>
+      </div>
+      <div class="nav-item active" data-page="dashboard" onclick="navigate('dashboard')">
+        <span class="nav-ico">⊞</span><span class="nav-lbl">Dashboard</span>
+      </div>
+      <!-- Chamados -->
+      <div class="nav-item" onclick="toggleMenu('menu-chamados','arr-chamados')">
+        <span class="nav-ico">📋</span><span class="nav-lbl">Chamados</span>
+        <span class="nav-arr open" id="arr-chamados">▾</span>
+      </div>
+      <div id="menu-chamados">
+        <div class="nav-group">Solicitante</div>
+        <div class="nav-sub" data-page="abertura" onclick="navigate('abertura')">Abertura</div>
+        <div class="nav-sub" data-page="meus-chamados" onclick="navigate('meus-chamados')">Meus chamados</div>
+        <div class="nav-sub" data-page="pesquisa" onclick="navigate('pesquisa')">Pesquisa satisfação</div>
+      </div>
+      <!-- Configuração -->
+      <div class="nav-item" onclick="toggleMenu('menu-config','arr-config')">
+        <span class="nav-ico">⚙️</span><span class="nav-lbl">Configuração</span>
+        <span class="nav-arr" id="arr-config">▾</span>
+      </div>
+      <div id="menu-config" class="hidden">
+        <div class="nav-group">Usuário</div>
+        <div class="nav-sub" data-page="agenda" onclick="navigate('agenda')">Agenda</div>
+        <div class="nav-sub" data-page="alterar-senha" onclick="navigate('alterar-senha')">Alterar senha</div>
+        <div class="nav-sub" data-page="usuario" onclick="navigate('usuario')">Usuário</div>
+      </div>
+    </nav>
+  </aside>
 
-    /* ═══════════════════════
-       MOCK DATA
-    ═══════════════════════ */
-    const MOCK_CHAMADOS = [
-      { id: 1001, titulo: 'Erro ao gerar boleto', categoria: 'Financeiro', status: 'Aberto', prioridade: 'Alta', sla: 'Acima', data: '2024-03-15', solicitante: 'Maria Silva' },
-      { id: 1002, titulo: 'Dúvida sobre prazo de pagamento', categoria: 'Suporte', status: 'Em andamento', prioridade: 'Normal', sla: 'Dentro', data: '2024-03-14', solicitante: 'João Pereira' },
-      { id: 1003, titulo: 'Acesso bloqueado ao sistema', categoria: 'TI', status: 'Concluído', prioridade: 'Urgente', sla: 'Dentro', data: '2024-03-13', solicitante: 'Ana Souza' },
-      { id: 1004, titulo: 'Relatório com valores errados', categoria: 'Financeiro', status: 'Devolvido', prioridade: 'Alta', sla: 'Acima 50%', data: '2024-03-12', solicitante: 'Carlos Lima' },
-      { id: 1005, titulo: 'Integração com sistema externo falhou', categoria: 'TI', status: 'Aberto', prioridade: 'Urgente', sla: 'Dentro', data: '2024-03-11', solicitante: 'Fernanda Costa' },
-      { id: 1006, titulo: 'Atualização de dados cadastrais', categoria: 'Cadastro', status: 'Concluído', prioridade: 'Baixa', sla: 'Dentro', data: '2024-03-10', solicitante: 'Roberto Alves' },
-    ];
+  <!-- MAIN -->
+  <div class="main">
+    <!-- TOPBAR -->
+    <div class="topbar">
+      <div class="topbar-l">
+        <button class="btn-ham" onclick="toggleSidebar()">☰</button>
+        <span class="greeting"><b>Olá, Igor</b> &nbsp;<span class="ip">— IP: 186.248.225.226</span></span>
+      </div>
+      <div class="topbar-r">
+        <button class="btn-ico" title="Configurações">⚙</button>
+        <button class="btn-ico" title="Ajuda">ℹ</button>
+        <button class="btn-sair">↩ Sair</button>
+      </div>
+    </div>
+    <!-- SUBTOOLBAR -->
+    <div class="subt">
+      <div class="subt-l">
+        <span class="subt-lbl">Buscar menu:</span>
+        <input class="subt-input" id="menuSearch" placeholder="Pesquisar menu - digite 3 caracteres" oninput="searchMenu(this.value)"/>
+        <span class="subt-lbl">Telas:</span>
+        <select class="subt-select" onchange="if(this.value)navigate(this.value)">
+          <option value="">Telas mais acessadas</option>
+          <option value="dashboard">Dashboard</option>
+          <option value="abertura">Abertura de chamado</option>
+          <option value="meus-chamados">Meus chamados</option>
+          <option value="pesquisa">Pesquisa satisfação</option>
+        </select>
+      </div>
+      <div class="subt-r">
+        <button class="btn-lnk" onclick="navigate('abertura')">◄ Abertura de chamado</button>
+        <button class="btn btn-primary btn-sm" onclick="navigate('abertura')">+ Novo chamado</button>
+      </div>
+    </div>
+    <!-- PAGES -->
+    <div class="content" id="content"></div>
+  </div>
+</div>
 
-    const DADOS_LINHA = [
-      { mes: 'Jan', abertos: 18, concluidos: 15 },
-      { mes: 'Fev', abertos: 22, concluidos: 20 },
-      { mes: 'Mar', abertos: 15, concluidos: 17 },
-      { mes: 'Abr', abertos: 28, concluidos: 24 },
-      { mes: 'Mai', abertos: 20, concluidos: 22 },
-      { mes: 'Jun', abertos: 25, concluidos: 21 },
-    ];
+<!-- MODAL -->
+<div class="overlay" id="modal" onclick="closeModal(event)">
+  <div class="modal" id="modal-inner">
+    <div class="modal-hd"><span class="modal-title" id="modal-title"></span><button class="btn-x" onclick="closeModal()">✕</button></div>
+    <div class="modal-bd" id="modal-body"></div>
+    <div class="modal-ft" id="modal-footer"></div>
+  </div>
+</div>
 
-    const DADOS_BARRA = [
-      { mes: 'Jan', abertos: 18, concluidos: 15 },
-      { mes: 'Fev', abertos: 22, concluidos: 20 },
-      { mes: 'Mar', abertos: 15, concluidos: 17 },
-      { mes: 'Abr', abertos: 28, concluidos: 24 },
-      { mes: 'Mai', abertos: 20, concluidos: 22 },
-      { mes: 'Jun', abertos: 25, concluidos: 21 },
-    ];
+<!-- TOAST CONTAINER -->
+<div class="toast-wrap" id="toasts"></div>
 
-    const TELAS_MAIS_ACESSADAS = [
-      'Telas mais acessadas',
-      'Dashboard',
-      'Abertura de Chamado',
-      'Meus Chamados',
-      'Pesquisa de Satisfação',
-    ];
+<script>
+/* ═══════════════════════════════
+   MOCK DATA
+═══════════════════════════════ */
+const CHAMADOS = [
+  {id:1001,titulo:'Erro ao gerar boleto',cat:'Financeiro',status:'Aberto',prio:'Alta',sla:'Acima',data:'2024-03-15',sol:'Maria Silva',desc:'O sistema apresenta falha ao tentar gerar o boleto do cliente.'},
+  {id:1002,titulo:'Dúvida sobre prazo de pagamento',cat:'Suporte',status:'Em andamento',prio:'Normal',sla:'Dentro',data:'2024-03-14',sol:'João Pereira',desc:'Cliente solicita informações sobre prazo de vencimento.'},
+  {id:1003,titulo:'Acesso bloqueado ao sistema',cat:'TI',status:'Concluído',prio:'Urgente',sla:'Dentro',data:'2024-03-13',sol:'Ana Souza',desc:'Usuário não consegue realizar login na plataforma.'},
+  {id:1004,titulo:'Relatório com valores errados',cat:'Financeiro',status:'Devolvido',prio:'Alta',sla:'Acima 50%',data:'2024-03-12',sol:'Carlos Lima',desc:'Os valores do relatório mensal estão inconsistentes.'},
+  {id:1005,titulo:'Integração com sistema externo falhou',cat:'TI',status:'Aberto',prio:'Urgente',sla:'Dentro',data:'2024-03-11',sol:'Fernanda Costa',desc:'A API de integração retorna erro 500.'},
+  {id:1006,titulo:'Atualização de dados cadastrais',cat:'Cadastro',status:'Concluído',prio:'Baixa',sla:'Dentro',data:'2024-03-10',sol:'Roberto Alves',desc:'Solicitação de atualização de endereço no cadastro.'},
+  {id:1007,titulo:'Erro no cálculo de juros',cat:'Financeiro',status:'Em andamento',prio:'Alta',sla:'Acima 50%',data:'2024-03-09',sol:'Patrícia Nunes',desc:'Os juros moratórios estão sendo calculados incorretamente.'},
+];
+const EVENTOS = [
+  {data:'2024-03-18',titulo:'Reunião de equipe'},
+  {data:'2024-03-22',titulo:'Review de chamados'},
+  {data:'2024-03-25',titulo:'Treinamento sistema'},
+];
+let events = [...EVENTOS];
+let ratings = {}, comentarios = {}, enviados = {};
+let aberturaStep = 1;
+let aberturaForm = {cat:'',subcat:'',titulo:'',desc:'',urgencia:'Normal'};
+let chamadoFiltro = 'Todos', chamadoBusca = '', chamadoPage = 1;
+let calMes = 2, calAno = 2024;
+const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const DIAS_SEM = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+let chartLine = null, chartBar = null;
 
-    /* ═══════════════════════
-       UTILS
-    ═══════════════════════ */
-    function badgeForStatus(status) {
-      const map = {
-        'Aberto': 'badge-info',
-        'Em andamento': 'badge-warning',
-        'Concluído': 'badge-success',
-        'Devolvido': 'badge-danger',
-      };
-      return map[status] || 'badge-secondary';
-    }
-    function badgeForPrioridade(p) {
-      const map = { 'Urgente': 'badge-danger', 'Alta': 'badge-warning', 'Normal': 'badge-info', 'Baixa': 'badge-secondary' };
-      return map[p] || 'badge-secondary';
-    }
+/* ═══════════════════════════════
+   NAVIGATION
+═══════════════════════════════ */
+let currentPage = 'dashboard';
+function navigate(page) {
+  currentPage = page;
+  // Atualiza nav
+  document.querySelectorAll('.nav-item[data-page],.nav-sub[data-page]').forEach(el => {
+    el.classList.toggle('active', el.dataset.page === page);
+  });
+  // Render
+  const c = document.getElementById('content');
+  c.scrollTop = 0;
+  switch(page) {
+    case 'dashboard':      c.innerHTML = renderDashboard(); initCharts(); break;
+    case 'abertura':       aberturaStep=1; aberturaForm={cat:'',subcat:'',titulo:'',desc:'',urgencia:'Normal'}; c.innerHTML = renderAbertura(); break;
+    case 'meus-chamados':  chamadoPage=1; c.innerHTML = renderMeusChamados(); break;
+    case 'pesquisa':       c.innerHTML = renderPesquisa(); break;
+    case 'agenda':         c.innerHTML = renderAgenda(); initCal(); break;
+    case 'alterar-senha':  c.innerHTML = renderAlterarSenha(); break;
+    case 'usuario':        c.innerHTML = renderUsuario(); break;
+    case 'ajuda':          c.innerHTML = renderAjuda(); break;
+    default:               c.innerHTML = renderDashboard(); initCharts();
+  }
+}
 
-    /* ═══════════════════════
-       TOAST
-    ═══════════════════════ */
-    function ToastContainer({ toasts, onDismiss }) {
-      return (
-        <div className="toast-container">
-          {toasts.map(t => (
-            <div key={t.id} className={`toast ${t.type}`} onClick={() => onDismiss(t.id)} style={{ cursor: 'pointer' }}>
-              <span style={{ fontSize: 18 }}>{t.type === 'success' ? '✓' : t.type === 'error' ? '✕' : 'ℹ'}</span>
-              <span style={{ fontSize: 14, flex: 1 }}>{t.msg}</span>
-            </div>
-          ))}
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('closed');
+}
+function toggleMenu(id, arrId) {
+  const el = document.getElementById(id);
+  const arr = document.getElementById(arrId);
+  el.classList.toggle('hidden');
+  arr.classList.toggle('open');
+}
+function searchMenu(v) {
+  if (v.length >= 3) {
+    const pages = [{k:'dashboard',l:'Dashboard'},{k:'abertura',l:'Abertura'},{k:'meus-chamados',l:'Meus chamados'},{k:'pesquisa',l:'Pesquisa satisfação'},{k:'agenda',l:'Agenda'},{k:'alterar-senha',l:'Alterar senha'},{k:'usuario',l:'Usuário'},{k:'ajuda',l:'Ajuda'}];
+    const found = pages.find(p => p.l.toLowerCase().includes(v.toLowerCase()));
+    if (found) navigate(found.k);
+  }
+}
+
+/* ═══════════════════════════════
+   TOAST
+═══════════════════════════════ */
+function toast(msg, type='info') {
+  const w = document.getElementById('toasts');
+  const id = 't'+Date.now();
+  const ico = type==='s'?'✓':type==='e'?'✕':'ℹ';
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.id = id;
+  el.innerHTML = `<span class="toast-ico">${ico}</span><span>${msg}</span>`;
+  el.onclick = () => el.remove();
+  w.appendChild(el);
+  setTimeout(() => el && el.remove(), 3800);
+}
+
+/* ═══════════════════════════════
+   MODAL
+═══════════════════════════════ */
+function openModal(title, body, footer='') {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').innerHTML = body;
+  document.getElementById('modal-footer').innerHTML = footer;
+  document.getElementById('modal').classList.add('show');
+}
+function closeModal(e) {
+  if (!e || e.target === document.getElementById('modal')) {
+    document.getElementById('modal').classList.remove('show');
+  }
+}
+
+/* ═══════════════════════════════
+   HELPERS
+═══════════════════════════════ */
+function badgeStatus(s) {
+  const m = {'Aberto':'b-info','Em andamento':'b-warning','Concluído':'b-success','Devolvido':'b-danger'};
+  return `<span class="badge ${m[s]||'b-gray'}">${s}</span>`;
+}
+function badgePrio(p) {
+  const m = {'Urgente':'b-danger','Alta':'b-warning','Normal':'b-info','Baixa':'b-gray'};
+  return `<span class="badge ${m[p]||'b-gray'}">${p}</span>`;
+}
+function dotSla(s) {
+  const c = s==='Dentro'?'dot-s':s==='Acima 50%'?'dot-w':'dot-d';
+  return `<span class="dot ${c}" style="margin-right:5px"></span>${s}`;
+}
+
+/* ═══════════════════════════════
+   DASHBOARD
+═══════════════════════════════ */
+function renderDashboard() {
+  return `
+  <div class="section">
+    <div class="section-title">Chamados</div>
+    <div class="g3 mb-lg">
+      <div class="kpi"><div class="kpi-h">Chamados prioritários</div><div class="kpi-b"><span class="kpi-v c-danger">3</span></div></div>
+      <div class="kpi"><div class="kpi-h">Chamados não concluídos</div><div class="kpi-b"><span class="kpi-v c-danger">7</span></div></div>
+      <div class="kpi"><div class="kpi-h">Chamados devolvidos pelo solicitante</div><div class="kpi-b"><span class="kpi-v c-warning">2</span></div></div>
+    </div>
+    <div class="g3">
+      <div class="kpi"><div class="kpi-h">Não concluídos dentro do SLA (Abaixo de 50%)</div><div class="kpi-b"><span class="kpi-v c-success">4</span></div></div>
+      <div class="kpi"><div class="kpi-h">Não concluídos dentro do SLA (Acima de 50%)</div><div class="kpi-b"><span class="kpi-v c-warning">1</span></div></div>
+      <div class="kpi"><div class="kpi-h">Não concluídos acima do SLA</div><div class="kpi-b"><span class="kpi-v c-danger">2</span></div></div>
+    </div>
+  </div>
+  <div class="g2 mb-xl">
+    <div class="section">
+      <div class="section-title">Chamados Abertos X Concluídos</div>
+      <div class="chart-card"><div class="chart-h">Chamados Abertos X Concluídos</div>
+        <div class="chart-b"><canvas id="chartLine" height="200"></canvas></div></div>
+    </div>
+    <div class="section">
+      <div class="section-title">Chamados por mês</div>
+      <div class="chart-card"><div class="chart-h">Chamados por mês</div>
+        <div class="chart-b"><canvas id="chartBar" height="200"></canvas></div></div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-title">Chamados recentes</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Título</th><th>Categoria</th><th>Solicitante</th><th>Prioridade</th><th>Status</th><th>Data</th><th>SLA</th></tr></thead>
+        <tbody>
+          ${CHAMADOS.slice(0,5).map(c=>`
+          <tr onclick="openChamado(${c.id})" style="cursor:pointer">
+            <td class="text-pjus bold">#${c.id}</td>
+            <td>${c.titulo}</td>
+            <td><span class="badge b-gray">${c.cat}</span></td>
+            <td>${c.sol}</td>
+            <td>${badgePrio(c.prio)}</td>
+            <td>${badgeStatus(c.status)}</td>
+            <td>${c.data}</td>
+            <td>${dotSla(c.sla)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function initCharts() {
+  setTimeout(() => {
+    const labels = ['Jan','Fev','Mar','Abr','Mai','Jun'];
+    const abertos = [18,22,15,28,20,25];
+    const concluidos = [15,20,17,24,22,21];
+    const cl = document.getElementById('chartLine');
+    const cb = document.getElementById('chartBar');
+    if (!cl || !cb) return;
+    if (chartLine) chartLine.destroy();
+    if (chartBar) chartBar.destroy();
+    chartLine = new Chart(cl, {
+      type:'line',
+      data:{labels,datasets:[
+        {label:'Abertos',data:abertos,borderColor:'#0061D6',backgroundColor:'#0061D615',borderWidth:2,pointRadius:3,tension:.3},
+        {label:'Concluídos',data:concluidos,borderColor:'#0E8557',backgroundColor:'#0E855715',borderWidth:2,pointRadius:3,tension:.3}
+      ]},
+      options:{responsive:true,plugins:{legend:{labels:{font:{size:12}}}},scales:{x:{grid:{display:false}},y:{grid:{color:'#f0f0f0'}}}}
+    });
+    chartBar = new Chart(cb, {
+      type:'bar',
+      data:{labels,datasets:[
+        {label:'Abertos',data:abertos,backgroundColor:'#FEC33C',borderRadius:3},
+        {label:'Concluídos',data:concluidos,backgroundColor:'#6B21E8',borderRadius:3}
+      ]},
+      options:{responsive:true,plugins:{legend:{labels:{font:{size:12}}}},scales:{x:{grid:{display:false}},y:{grid:{color:'#f0f0f0'}}}}
+    });
+  }, 50);
+}
+
+function openChamado(id) {
+  const c = CHAMADOS.find(x=>x.id===id);
+  if (!c) return;
+  const body = `
+    <div class="detail-grid mb-lg">
+      <span class="text-muted">Título:</span><strong>${c.titulo}</strong>
+      <span class="text-muted">Categoria:</span><span>${c.cat}</span>
+      <span class="text-muted">Solicitante:</span><span>${c.sol}</span>
+      <span class="text-muted">Prioridade:</span>${badgePrio(c.prio)}
+      <span class="text-muted">Status:</span>${badgeStatus(c.status)}
+      <span class="text-muted">Data:</span><span>${c.data}</span>
+      <span class="text-muted">SLA:</span><span>${dotSla(c.sla)}</span>
+    </div>
+    <div class="hr"></div>
+    <p class="form-label mb-md">Descrição</p>
+    <p class="text-sm">${c.desc}</p>
+    <div class="hr"></div>
+    <p class="form-label mb-md">Histórico</p>
+    <div style="background:#f8f9fa;border-radius:6px;padding:10px 12px;font-size:12px;color:var(--text-secondary)">
+      <b>Sistema</b> — ${c.data}<br>Chamado aberto pelo solicitante.
+    </div>`;
+  const footer = c.status==='Devolvido'
+    ? `<button class="btn btn-primary btn-sm" onclick="closeModal();toast('Chamado reaberto com sucesso!','s')">Reabrir</button><button class="btn btn-secondary btn-sm" onclick="closeModal()">Fechar</button>`
+    : `<button class="btn btn-secondary btn-sm" onclick="closeModal()">Fechar</button>`;
+  openModal(`Chamado #${c.id}`, body, footer);
+}
+
+/* ═══════════════════════════════
+   ABERTURA (STEPPER)
+═══════════════════════════════ */
+function renderAbertura() {
+  const steps = ['Categoria','Detalhes','Confirmação'];
+  const stepper = steps.map((s,i)=>{
+    const n=i+1, state=n<aberturaStep?'done':n===aberturaStep?'active':'pending';
+    const cls=state==='done'?'sc-done':state==='active'?'sc-active':'sc-pending';
+    const lbl=`<span class="step-lbl${state==='active'?' active':''}">${s}</span>`;
+    const circ=`<div class="step-circle ${cls}">${state==='done'?'✓':n}</div>`;
+    const line=i<steps.length-1?`<div class="step-line${aberturaStep>n?' done':''}"></div>`:'';
+    return `<div class="step-wrap">${circ}${lbl}</div>${line}`;
+  }).join('');
+
+  let body='';
+  if (aberturaStep===1) body=`
+    <div class="form-group"><label class="form-label">Categoria *</label>
+      <select class="form-control" id="ab-cat" onchange="aberturaForm.cat=this.value">
+        <option value="">Selecione...</option>
+        <option${aberturaForm.cat==='Financeiro'?' selected':''}>Financeiro</option>
+        <option${aberturaForm.cat==='TI'?' selected':''}>TI</option>
+        <option${aberturaForm.cat==='Suporte'?' selected':''}>Suporte</option>
+        <option${aberturaForm.cat==='Cadastro'?' selected':''}>Cadastro</option>
+        <option${aberturaForm.cat==='Operacional'?' selected':''}>Operacional</option>
+      </select></div>
+    <div class="form-group"><label class="form-label">Subcategoria</label>
+      <select class="form-control" id="ab-sub" onchange="aberturaForm.subcat=this.value">
+        <option value="">Selecione...</option>
+        <option>Boleto</option><option>Relatório</option><option>Acesso</option><option>Integração</option>
+      </select></div>`;
+  else if (aberturaStep===2) body=`
+    <div class="form-group"><label class="form-label">Título *</label>
+      <input class="form-control" id="ab-tit" placeholder="Resumo do problema" value="${aberturaForm.titulo}" oninput="aberturaForm.titulo=this.value"/></div>
+    <div class="form-group"><label class="form-label">Descrição *</label>
+      <textarea class="form-control" id="ab-desc" rows="4" placeholder="Descreva o problema com detalhes...">${aberturaForm.desc}</textarea></div>
+    <div class="form-group"><label class="form-label">Urgência</label>
+      <select class="form-control" id="ab-urg" onchange="aberturaForm.urgencia=this.value">
+        ${['Baixa','Normal','Alta','Urgente'].map(u=>`<option${u===aberturaForm.urgencia?' selected':''}>${u}</option>`).join('')}
+      </select></div>
+    <div class="form-group"><label class="form-label">Anexo (opcional)</label>
+      <input type="file" class="form-control" style="padding-top:5px"/></div>`;
+  else body=`
+    <div class="alert alert-info mb-lg"><span>ℹ</span><span>Revise as informações antes de confirmar.</span></div>
+    <div class="detail-grid">
+      <span class="text-muted">Categoria:</span><strong>${aberturaForm.cat||'—'}</strong>
+      <span class="text-muted">Subcategoria:</span><strong>${aberturaForm.subcat||'—'}</strong>
+      <span class="text-muted">Título:</span><strong>${aberturaForm.titulo||'—'}</strong>
+      <span class="text-muted">Urgência:</span>${badgePrio(aberturaForm.urgencia)}
+      <span class="text-muted">Solicitante:</span><strong>Igor Vilar de Almeida Costa</strong>
+    </div>`;
+
+  return `
+  <div class="page-header"><h1 class="page-title">Abertura de Chamado</h1></div>
+  <div class="stepper mb-xl">${stepper}</div>
+  <div class="card" style="max-width:620px">
+    <div>${body}</div>
+    <div class="flex je gap-md mt-xl">
+      ${aberturaStep>1?`<button class="btn btn-secondary btn-sm" onclick="aberturaBack()">← Voltar</button>`:''}
+      <button class="btn btn-primary btn-sm" onclick="aberturaNext()">
+        ${aberturaStep<3?'Próximo →':'✓ Abrir Chamado'}
+      </button>
+    </div>
+  </div>`;
+}
+
+function aberturaNext() {
+  if (aberturaStep===1) {
+    aberturaForm.cat = document.getElementById('ab-cat')?.value||aberturaForm.cat;
+  } else if (aberturaStep===2) {
+    aberturaForm.titulo = document.getElementById('ab-tit')?.value||aberturaForm.titulo;
+    aberturaForm.desc = document.getElementById('ab-desc')?.value||aberturaForm.desc;
+    aberturaForm.urgencia = document.getElementById('ab-urg')?.value||aberturaForm.urgencia;
+    if (!aberturaForm.titulo.trim()) { toast('Preencha o título do chamado.','e'); return; }
+  } else {
+    toast('Chamado #1008 aberto com sucesso!','s');
+    aberturaStep=1; aberturaForm={cat:'',subcat:'',titulo:'',desc:'',urgencia:'Normal'};
+    document.getElementById('content').innerHTML = renderAbertura();
+    return;
+  }
+  aberturaStep++;
+  document.getElementById('content').innerHTML = renderAbertura();
+}
+function aberturaBack() {
+  if (aberturaStep>1) { aberturaStep--; document.getElementById('content').innerHTML = renderAbertura(); }
+}
+
+/* ═══════════════════════════════
+   MEUS CHAMADOS
+═══════════════════════════════ */
+const PER_PAGE = 5;
+function renderMeusChamados() {
+  const filtered = CHAMADOS.filter(c => {
+    const ms = chamadoFiltro==='Todos'||c.status===chamadoFiltro;
+    const mb = c.titulo.toLowerCase().includes(chamadoBusca.toLowerCase())||String(c.id).includes(chamadoBusca);
+    return ms && mb;
+  });
+  const total = Math.ceil(filtered.length/PER_PAGE);
+  const paged = filtered.slice((chamadoPage-1)*PER_PAGE, chamadoPage*PER_PAGE);
+
+  const rows = paged.length===0
+    ? `<tr><td colspan="8"><div class="empty"><span class="empty-ico">📭</span><span class="empty-txt">Nenhum chamado encontrado</span></div></td></tr>`
+    : paged.map(c=>`
+      <tr>
+        <td class="text-pjus bold">#${c.id}</td>
+        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.titulo}</td>
+        <td><span class="badge b-gray">${c.cat}</span></td>
+        <td>${badgePrio(c.prio)}</td>
+        <td>${badgeStatus(c.status)}</td>
+        <td>${c.data}</td>
+        <td>${dotSla(c.sla)}</td>
+        <td><button class="btn btn-secondary btn-sm" onclick="openChamado(${c.id})">Ver</button></td>
+      </tr>`).join('');
+
+  const pager = total>1 ? `
+    <div class="pager">
+      <button class="pg" onclick="setPage(${chamadoPage-1})" ${chamadoPage===1?'disabled':''}>‹</button>
+      ${Array.from({length:total},(_,i)=>`<button class="pg${chamadoPage===i+1?' active':''}" onclick="setPage(${i+1})">${i+1}</button>`).join('')}
+      <button class="pg" onclick="setPage(${chamadoPage+1})" ${chamadoPage===total?'disabled':''}>›</button>
+    </div>` : '';
+
+  return `
+  <div class="page-header"><h1 class="page-title">Meus Chamados</h1><span class="text-muted text-sm">${filtered.length} chamado(s)</span></div>
+  <div class="card mb-lg">
+    <div class="flex ai gap-lg" style="flex-wrap:wrap">
+      <div style="flex:1;min-width:200px">
+        <label class="form-label">Buscar</label>
+        <div class="input-group">
+          <input class="form-control" value="${chamadoBusca}" placeholder="Nº ou título..." oninput="chamadoBusca=this.value;chamadoPage=1;rerenderChamados()"/>
+          <button class="btn btn-secondary">🔍</button>
         </div>
-      );
-    }
+      </div>
+      <div>
+        <label class="form-label">Status</label>
+        <select class="form-control" onchange="chamadoFiltro=this.value;chamadoPage=1;rerenderChamados()">
+          ${['Todos','Aberto','Em andamento','Concluído','Devolvido'].map(s=>`<option${s===chamadoFiltro?' selected':''}>${s}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+  </div>
+  <div class="table-wrap mb-md">
+    <table>
+      <thead><tr><th>#</th><th>Título</th><th>Categoria</th><th>Prioridade</th><th>Status</th><th>Data</th><th>SLA</th><th>Ação</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>
+  ${pager}`;
+}
+function rerenderChamados() { document.getElementById('content').innerHTML = renderMeusChamados(); }
+function setPage(p) {
+  const filtered = CHAMADOS.filter(c=>(chamadoFiltro==='Todos'||c.status===chamadoFiltro)&&(c.titulo.toLowerCase().includes(chamadoBusca.toLowerCase())||String(c.id).includes(chamadoBusca)));
+  const total = Math.ceil(filtered.length/PER_PAGE);
+  chamadoPage = Math.max(1,Math.min(p,total));
+  rerenderChamados();
+}
 
-    /* ═══════════════════════
-       TOPBAR
-    ═══════════════════════ */
-    function Topbar({ onToggleSidebar, activePage, onNavigate }) {
-      return (
-        <div className="topbar">
-          <div className="topbar-left">
-            <button className="hamburger" onClick={onToggleSidebar} title="Menu">☰</button>
-            <span className="topbar-greeting">
-              Olá, Igor &nbsp;<span className="topbar-ip">— IP: 186.248.225.226</span>
-            </span>
-          </div>
-          <div className="topbar-right">
-            <button className="topbar-icon-btn" title="Configurações">⚙</button>
-            <button className="topbar-icon-btn" title="Ajuda">ℹ</button>
-            <button className="btn-sair" title="Sair">↩ Sair</button>
-          </div>
+/* ═══════════════════════════════
+   PESQUISA SATISFAÇÃO
+═══════════════════════════════ */
+function renderPesquisa() {
+  const pendentes = CHAMADOS.filter(c=>c.status==='Concluído');
+  const cards = pendentes.map(c => {
+    if (enviados[c.id]) return `
+      <div class="card mb-md">
+        <div class="alert alert-success" style="margin:0"><span>✓</span><span>Obrigado pela avaliação do chamado <strong>#${c.id}</strong>!</span></div>
+      </div>`;
+    const stars = [1,2,3,4,5].map(n=>`<span class="star${(ratings[c.id]||0)>=n?' on':''}" onclick="setRating(${c.id},${n})">★</span>`).join('');
+    const lbls = ['','Péssimo','Ruim','Regular','Bom','Excelente'];
+    return `
+      <div class="card mb-md">
+        <div class="flex ai jb mb-md">
+          <span class="bold">#${c.id} — ${c.titulo}</span>
+          <span class="badge b-gray">${c.cat}</span>
         </div>
-      );
-    }
-
-    /* ═══════════════════════
-       SUBTOOLBAR
-    ═══════════════════════ */
-    function Subtoolbar({ onNavigate }) {
-      const [search, setSearch] = useState('');
-      const [tela, setTela] = useState(TELAS_MAIS_ACESSADAS[0]);
-
-      return (
-        <div className="subtoolbar">
-          <div className="subtoolbar-left">
-            <span className="subtoolbar-label">Buscar menu:</span>
-            <input
-              className="subtoolbar-input"
-              placeholder="Pesquisar menu - digite 3 caracteres"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-            <span className="subtoolbar-label">Telas:</span>
-            <select className="subtoolbar-select" value={tela} onChange={e => setTela(e.target.value)}>
-              {TELAS_MAIS_ACESSADAS.map(t => <option key={t}>{t}</option>)}
-            </select>
-          </div>
-          <div className="subtoolbar-right">
-            <button className="btn-link" onClick={() => onNavigate('abertura')}>◄ Abertura de chamado</button>
-            <button className="btn btn-primary btn-sm" onClick={() => onNavigate('abertura')}>+ Novo chamado</button>
-          </div>
+        <p class="text-muted text-xs mb-lg">Concluído em ${c.data}</p>
+        <p class="form-label mb-md">Como avalia o atendimento?</p>
+        <div class="stars mb-lg" id="stars-${c.id}">
+          ${stars}
+          <span style="margin-left:8px;font-size:12px;color:var(--text-secondary)">${ratings[c.id]?lbls[ratings[c.id]]:''}</span>
         </div>
-      );
-    }
-
-    /* ═══════════════════════
-       SIDEBAR
-    ═══════════════════════ */
-    function Sidebar({ collapsed, activePage, onNavigate, onClose }) {
-      const [chamadosOpen, setChamadosOpen] = useState(true);
-      const [configOpen, setConfigOpen] = useState(false);
-
-      return (
-        <>
-          {!collapsed && <div className="sidebar-overlay visible" onClick={onClose} style={{ display: 'none' }} />}
-          <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>
-            {/* Logo */}
-            <div className="sidebar-logo">
-              <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                <circle cx="16" cy="16" r="16" fill="#0061D6"/>
-                <text x="8" y="22" fill="#fff" fontSize="14" fontWeight="bold" fontFamily="Verdana">P</text>
-              </svg>
-              <span className="sidebar-logo-text">PJUS</span>
-            </div>
-
-            {/* User */}
-            <div className="sidebar-user">
-              <div className="sidebar-avatar">
-                <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-                  <circle cx="14" cy="10" r="6" fill="#adb5ba"/>
-                  <ellipse cx="14" cy="26" rx="10" ry="7" fill="#adb5ba"/>
-                </svg>
-              </div>
-              <span className="sidebar-user-name">Igor Vilar de Almeida Costa</span>
-            </div>
-
-            {/* Nav */}
-            <nav className="sidebar-nav">
-              <div
-                className={`nav-item${activePage === 'ajuda' ? ' active' : ''}`}
-                onClick={() => onNavigate('ajuda')}
-              >
-                <span className="nav-icon">?</span>
-                <span className="nav-label">Ajuda</span>
-              </div>
-
-              <div
-                className={`nav-item${activePage === 'dashboard' ? ' active' : ''}`}
-                onClick={() => onNavigate('dashboard')}
-              >
-                <span className="nav-icon">⊞</span>
-                <span className="nav-label">Dashboard</span>
-              </div>
-
-              <div className="nav-item" onClick={() => setChamadosOpen(o => !o)}>
-                <span className="nav-icon">☰</span>
-                <span className="nav-label">Chamados</span>
-                <span className={`nav-chevron${chamadosOpen ? ' open' : ''}`}>▾</span>
-              </div>
-              {chamadosOpen && (
-                <div className="nav-submenu">
-                  <div className="nav-group-label">Solicitante</div>
-                  <div
-                    className={`nav-subitem${activePage === 'abertura' ? ' active' : ''}`}
-                    onClick={() => onNavigate('abertura')}
-                  >Abertura</div>
-                  <div
-                    className={`nav-subitem${activePage === 'meus-chamados' ? ' active' : ''}`}
-                    onClick={() => onNavigate('meus-chamados')}
-                  >Meus chamados</div>
-                  <div
-                    className={`nav-subitem${activePage === 'pesquisa' ? ' active' : ''}`}
-                    onClick={() => onNavigate('pesquisa')}
-                  >Pesquisa satisfação</div>
-                </div>
-              )}
-
-              <div className="nav-item" onClick={() => setConfigOpen(o => !o)}>
-                <span className="nav-icon">⚙</span>
-                <span className="nav-label">Configuração</span>
-                <span className={`nav-chevron${configOpen ? ' open' : ''}`}>▾</span>
-              </div>
-              {configOpen && (
-                <div className="nav-submenu">
-                  <div className="nav-group-label">Usuário</div>
-                  <div
-                    className={`nav-subitem${activePage === 'agenda' ? ' active' : ''}`}
-                    onClick={() => onNavigate('agenda')}
-                  >Agenda</div>
-                  <div
-                    className={`nav-subitem${activePage === 'alterar-senha' ? ' active' : ''}`}
-                    onClick={() => onNavigate('alterar-senha')}
-                  >Alterar senha</div>
-                  <div
-                    className={`nav-subitem${activePage === 'usuario' ? ' active' : ''}`}
-                    onClick={() => onNavigate('usuario')}
-                  >Usuário</div>
-                </div>
-              )}
-            </nav>
-          </aside>
-        </>
-      );
-    }
-
-    /* ═══════════════════════
-       PAGE: DASHBOARD
-    ═══════════════════════ */
-    function Dashboard() {
-      const kpis1 = [
-        { label: 'Chamados prioritários', value: 3, color: 'kpi-danger' },
-        { label: 'Chamados não concluídos', value: 7, color: 'kpi-danger' },
-        { label: 'Chamados devolvidos pelo solicitante', value: 2, color: 'kpi-warning' },
-      ];
-      const kpis2 = [
-        { label: 'Não concluídos dentro do SLA (Abaixo de 50%)', value: 4, color: 'kpi-success' },
-        { label: 'Não concluídos dentro do SLA (Acima de 50%)', value: 1, color: 'kpi-warning' },
-        { label: 'Não concluídos acima do SLA', value: 2, color: 'kpi-danger' },
-      ];
-
-      return (
-        <div>
-          {/* KPIs */}
-          <div className="section">
-            <h2 className="section-title">Chamados</h2>
-            <div className="grid-3 mb-lg">
-              {kpis1.map(k => (
-                <div className="kpi-card" key={k.label}>
-                  <div className="kpi-card-header">{k.label}</div>
-                  <div className="kpi-card-body">
-                    <span className={`kpi-value ${k.color}`}>{k.value}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="grid-3">
-              {kpis2.map(k => (
-                <div className="kpi-card" key={k.label}>
-                  <div className="kpi-card-header">{k.label}</div>
-                  <div className="kpi-card-body">
-                    <span className={`kpi-value ${k.color}`}>{k.value}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Charts */}
-          <div className="grid-2">
-            <div className="section">
-              <h2 className="section-title">Chamados Abertos X Concluídos</h2>
-              <div className="chart-card">
-                <div className="chart-card-header">Chamados Abertos X Concluídos</div>
-                <div className="chart-card-body">
-                  <ResponsiveContainer width="100%" height={220}>
-                    <LineChart data={DADOS_LINHA} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis dataKey="mes" tick={{ fontSize: 12, fill: '#717979' }} />
-                      <YAxis tick={{ fontSize: 12, fill: '#717979' }} />
-                      <Tooltip />
-                      <Legend wrapperStyle={{ fontSize: 12 }} />
-                      <Line type="monotone" dataKey="abertos" stroke="#0061D6" strokeWidth={2} dot={{ r: 3 }} name="Abertos" />
-                      <Line type="monotone" dataKey="concluidos" stroke="#0E8557" strokeWidth={2} dot={{ r: 3 }} name="Concluídos" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </div>
-
-            <div className="section">
-              <h2 className="section-title">Chamados por mês</h2>
-              <div className="chart-card">
-                <div className="chart-card-header">Chamados por mês</div>
-                <div className="chart-card-body">
-                  <ResponsiveContainer width="100%" height={220}>
-                    <BarChart data={DADOS_BARRA} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis dataKey="mes" tick={{ fontSize: 12, fill: '#717979' }} />
-                      <YAxis tick={{ fontSize: 12, fill: '#717979' }} />
-                      <Tooltip />
-                      <Legend wrapperStyle={{ fontSize: 12 }} />
-                      <Bar dataKey="abertos" fill="#FEC33C" name="Abertos" radius={[3,3,0,0]} />
-                      <Bar dataKey="concluidos" fill="#6B21E8" name="Concluídos" radius={[3,3,0,0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Recent table */}
-          <div className="section mt-xl">
-            <h2 className="section-title">Chamados recentes</h2>
-            <div className="table-wrapper">
-              <table>
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Título</th>
-                    <th>Categoria</th>
-                    <th>Solicitante</th>
-                    <th>Prioridade</th>
-                    <th>Status</th>
-                    <th>Data</th>
-                    <th>SLA</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {MOCK_CHAMADOS.slice(0, 4).map(c => (
-                    <tr key={c.id}>
-                      <td><span className="text-pjus font-bold">#{c.id}</span></td>
-                      <td>{c.titulo}</td>
-                      <td><span className="badge badge-secondary">{c.categoria}</span></td>
-                      <td>{c.solicitante}</td>
-                      <td><span className={`badge ${badgeForPrioridade(c.prioridade)}`}>{c.prioridade}</span></td>
-                      <td><span className={`badge ${badgeForStatus(c.status)}`}>{c.status}</span></td>
-                      <td>{c.data}</td>
-                      <td>
-                        <span className={`status-dot ${c.sla === 'Dentro' ? 'success' : c.sla === 'Acima 50%' ? 'warning' : 'danger'}`} style={{ marginRight: 6 }} />
-                        {c.sla}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+        <div class="form-group">
+          <label class="form-label">Comentário (opcional)</label>
+          <textarea class="form-control" rows="2" placeholder="Deixe seu comentário..." onchange="comentarios[${c.id}]=this.value">${comentarios[c.id]||''}</textarea>
         </div>
-      );
-    }
-
-    /* ═══════════════════════
-       PAGE: ABERTURA DE CHAMADO (stepper)
-    ═══════════════════════ */
-    function AberturaPage({ onToast }) {
-      const [step, setStep] = useState(1);
-      const [form, setForm] = useState({
-        categoria: '', subcategoria: '', titulo: '', descricao: '',
-        urgencia: 'Normal', anexo: null,
-      });
-
-      const steps = ['Categoria', 'Detalhes', 'Confirmação'];
-
-      function next() {
-        if (step < 3) setStep(s => s + 1);
-        else { onToast('Chamado aberto com sucesso! #1007', 'success'); setStep(1); setForm({ categoria: '', subcategoria: '', titulo: '', descricao: '', urgencia: 'Normal', anexo: null }); }
-      }
-      function back() { if (step > 1) setStep(s => s - 1); }
-
-      return (
-        <div>
-          <div className="page-header">
-            <h1 className="page-title">Abertura de Chamado</h1>
-          </div>
-
-          {/* Stepper */}
-          <div className="stepper mb-xl">
-            {steps.map((s, i) => {
-              const n = i + 1;
-              const state = n < step ? 'done' : n === step ? 'active' : 'pending';
-              return (
-                <React.Fragment key={s}>
-                  <div className="step">
-                    <div className={`step-circle ${state}`}>{state === 'done' ? '✓' : n}</div>
-                    <span className={`step-label${state === 'active' ? ' active' : ''}`}>{s}</span>
-                  </div>
-                  {i < steps.length - 1 && <div className={`step-line${step > n ? ' done' : ''}`} />}
-                </React.Fragment>
-              );
-            })}
-          </div>
-
-          <div className="card shadow-sm" style={{ maxWidth: 640 }}>
-            <div style={{ padding: 'var(--spacing-xl)' }}>
-              {step === 1 && (
-                <div>
-                  <h3 className="mb-lg" style={{ fontFamily: 'var(--font-title)', fontSize: 'var(--size-3)', fontWeight: 700 }}>Selecione a categoria</h3>
-                  <div className="form-group">
-                    <label className="form-label">Categoria *</label>
-                    <select className="form-control" value={form.categoria} onChange={e => setForm({ ...form, categoria: e.target.value })}>
-                      <option value="">Selecione...</option>
-                      <option>Financeiro</option>
-                      <option>TI</option>
-                      <option>Suporte</option>
-                      <option>Cadastro</option>
-                      <option>Operacional</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Subcategoria</label>
-                    <select className="form-control" value={form.subcategoria} onChange={e => setForm({ ...form, subcategoria: e.target.value })}>
-                      <option value="">Selecione...</option>
-                      <option>Boleto</option>
-                      <option>Relatório</option>
-                      <option>Acesso</option>
-                      <option>Integração</option>
-                    </select>
-                  </div>
-                </div>
-              )}
-
-              {step === 2 && (
-                <div>
-                  <h3 className="mb-lg" style={{ fontFamily: 'var(--font-title)', fontSize: 'var(--size-3)', fontWeight: 700 }}>Descreva o problema</h3>
-                  <div className="form-group">
-                    <label className="form-label">Título *</label>
-                    <input className="form-control" placeholder="Resumo do problema" value={form.titulo} onChange={e => setForm({ ...form, titulo: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Descrição *</label>
-                    <textarea className="form-control" placeholder="Descreva o problema com detalhes..." rows={4} value={form.descricao} onChange={e => setForm({ ...form, descricao: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Urgência</label>
-                    <select className="form-control" value={form.urgencia} onChange={e => setForm({ ...form, urgencia: e.target.value })}>
-                      <option>Baixa</option>
-                      <option>Normal</option>
-                      <option>Alta</option>
-                      <option>Urgente</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Anexo (opcional)</label>
-                    <input type="file" className="form-control" style={{ paddingTop: 6 }} />
-                  </div>
-                </div>
-              )}
-
-              {step === 3 && (
-                <div>
-                  <h3 className="mb-lg" style={{ fontFamily: 'var(--font-title)', fontSize: 'var(--size-3)', fontWeight: 700 }}>Confirmar abertura</h3>
-                  <div className="alert alert-info mb-lg">
-                    <span>ℹ</span>
-                    <span>Revise as informações antes de confirmar a abertura do chamado.</span>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '8px 16px', fontSize: 'var(--size-2)' }}>
-                    <span className="text-muted">Categoria:</span><strong>{form.categoria || '—'}</strong>
-                    <span className="text-muted">Subcategoria:</span><strong>{form.subcategoria || '—'}</strong>
-                    <span className="text-muted">Título:</span><strong>{form.titulo || '—'}</strong>
-                    <span className="text-muted">Urgência:</span>
-                    <span><span className={`badge ${badgeForPrioridade(form.urgencia)}`}>{form.urgencia}</span></span>
-                    <span className="text-muted">Solicitante:</span><strong>Igor Vilar de Almeida Costa</strong>
-                  </div>
-                </div>
-              )}
-
-              <div className="d-flex gap-md mt-xl" style={{ justifyContent: 'flex-end' }}>
-                {step > 1 && <button className="btn btn-secondary" onClick={back}>← Voltar</button>}
-                <button className="btn btn-primary" onClick={next}>
-                  {step < 3 ? 'Próximo →' : '✓ Abrir Chamado'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    /* ═══════════════════════
-       PAGE: MEUS CHAMADOS
-    ═══════════════════════ */
-    function MeusChamadosPage({ onToast }) {
-      const [chamados, setChamados] = useState(MOCK_CHAMADOS);
-      const [statusFiltro, setStatusFiltro] = useState('Todos');
-      const [busca, setBusca] = useState('');
-      const [selectedId, setSelectedId] = useState(null);
-      const [page, setPage] = useState(1);
-      const PER_PAGE = 5;
-
-      const filtered = chamados.filter(c => {
-        const matchStatus = statusFiltro === 'Todos' || c.status === statusFiltro;
-        const matchBusca = c.titulo.toLowerCase().includes(busca.toLowerCase()) || String(c.id).includes(busca);
-        return matchStatus && matchBusca;
-      });
-
-      const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
-      const totalPages = Math.ceil(filtered.length / PER_PAGE);
-      const selected = selectedId ? chamados.find(c => c.id === selectedId) : null;
-
-      return (
-        <div>
-          <div className="page-header">
-            <h1 className="page-title">Meus Chamados</h1>
-            <span className="text-muted text-sm">{filtered.length} chamado(s)</span>
-          </div>
-
-          {/* Filters */}
-          <div className="card shadow-sm mb-lg">
-            <div style={{ padding: '12px 16px', display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-              <div style={{ flex: 1, minWidth: 200 }}>
-                <label className="form-label">Buscar</label>
-                <div className="input-group">
-                  <input className="form-control" placeholder="Nº ou título..." value={busca} onChange={e => { setBusca(e.target.value); setPage(1); }} />
-                  <button className="btn btn-secondary" style={{ borderRadius: '0 4px 4px 0' }}>🔍</button>
-                </div>
-              </div>
-              <div>
-                <label className="form-label">Status</label>
-                <select className="form-control" value={statusFiltro} onChange={e => { setStatusFiltro(e.target.value); setPage(1); }}>
-                  {['Todos', 'Aberto', 'Em andamento', 'Concluído', 'Devolvido'].map(s => <option key={s}>{s}</option>)}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div className="table-wrapper mb-md">
-            <table>
-              <thead>
-                <tr>
-                  <th>#</th><th>Título</th><th>Categoria</th><th>Prioridade</th>
-                  <th>Status</th><th>Data</th><th>SLA</th><th>Ação</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paged.length === 0 && (
-                  <tr><td colSpan={8}><div className="empty-state"><span className="empty-state-icon">📭</span><span className="empty-state-text">Nenhum chamado encontrado</span></div></td></tr>
-                )}
-                {paged.map(c => (
-                  <tr key={c.id}>
-                    <td><span className="text-pjus font-bold">#{c.id}</span></td>
-                    <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.titulo}</td>
-                    <td><span className="badge badge-secondary">{c.categoria}</span></td>
-                    <td><span className={`badge ${badgeForPrioridade(c.prioridade)}`}>{c.prioridade}</span></td>
-                    <td><span className={`badge ${badgeForStatus(c.status)}`}>{c.status}</span></td>
-                    <td>{c.data}</td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span className={`status-dot ${c.sla === 'Dentro' ? 'success' : c.sla === 'Acima 50%' ? 'warning' : 'danger'}`} />
-                        <span style={{ fontSize: 12 }}>{c.sla}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <button className="btn btn-secondary btn-sm" onClick={() => setSelectedId(c.id)}>Ver</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {totalPages > 1 && (
-            <div className="pagination">
-              <button className="page-btn" onClick={() => setPage(p => Math.max(1, p - 1))}>‹</button>
-              {Array.from({ length: totalPages }, (_, i) => (
-                <button key={i} className={`page-btn${page === i + 1 ? ' active' : ''}`} onClick={() => setPage(i + 1)}>{i + 1}</button>
-              ))}
-              <button className="page-btn" onClick={() => setPage(p => Math.min(totalPages, p + 1))}>›</button>
-            </div>
-          )}
-
-          {/* Detail Modal */}
-          {selected && (
-            <div className="modal-overlay" onClick={() => setSelectedId(null)}>
-              <div className="modal" onClick={e => e.stopPropagation()}>
-                <div className="modal-header">
-                  <span className="modal-title">Chamado #{selected.id}</span>
-                  <button className="btn-close" onClick={() => setSelectedId(null)}>✕</button>
-                </div>
-                <div className="modal-body">
-                  <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr', gap: '10px 16px', fontSize: 'var(--size-2)' }}>
-                    <span className="text-muted">Título:</span><strong>{selected.titulo}</strong>
-                    <span className="text-muted">Categoria:</span><span>{selected.categoria}</span>
-                    <span className="text-muted">Solicitante:</span><span>{selected.solicitante}</span>
-                    <span className="text-muted">Prioridade:</span><span className={`badge ${badgeForPrioridade(selected.prioridade)}`}>{selected.prioridade}</span>
-                    <span className="text-muted">Status:</span><span className={`badge ${badgeForStatus(selected.status)}`}>{selected.status}</span>
-                    <span className="text-muted">Data:</span><span>{selected.data}</span>
-                    <span className="text-muted">SLA:</span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span className={`status-dot ${selected.sla === 'Dentro' ? 'success' : selected.sla === 'Acima 50%' ? 'warning' : 'danger'}`} />
-                      {selected.sla}
-                    </span>
-                  </div>
-                  <hr className="divider" />
-                  <div>
-                    <p className="form-label mb-md">Histórico de interações</p>
-                    <div style={{ background: '#f8f9fa', borderRadius: 6, padding: 12, fontSize: 13, color: 'var(--color-text-secondary)' }}>
-                      <p><strong>Sistema</strong> — {selected.data}</p>
-                      <p>Chamado aberto pelo solicitante.</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="modal-footer">
-                  {selected.status === 'Devolvido' && (
-                    <button className="btn btn-primary btn-sm" onClick={() => { onToast('Chamado reaberto!', 'success'); setSelectedId(null); }}>Reabrir chamado</button>
-                  )}
-                  <button className="btn btn-secondary btn-sm" onClick={() => setSelectedId(null)}>Fechar</button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    /* ═══════════════════════
-       PAGE: PESQUISA SATISFAÇÃO
-    ═══════════════════════ */
-    function PesquisaPage({ onToast }) {
-      const pendentes = MOCK_CHAMADOS.filter(c => c.status === 'Concluído');
-      const [ratings, setRatings] = useState({});
-      const [comentarios, setComentarios] = useState({});
-      const [enviados, setEnviados] = useState({});
-
-      function enviar(id) {
-        if (!ratings[id]) { onToast('Por favor, selecione uma avaliação.', 'error'); return; }
-        setEnviados(p => ({ ...p, [id]: true }));
-        onToast('Avaliação enviada com sucesso!', 'success');
-      }
-
-      return (
-        <div>
-          <div className="page-header">
-            <h1 className="page-title">Pesquisa de Satisfação</h1>
-          </div>
-
-          <div className="alert alert-info mb-lg">
-            <span>ℹ</span>
-            <span>Avalie os chamados concluídos para nos ajudar a melhorar o serviço.</span>
-          </div>
-
-          {pendentes.length === 0 && (
-            <div className="empty-state">
-              <span className="empty-state-icon">🎉</span>
-              <span className="empty-state-text">Nenhum chamado pendente de avaliação!</span>
-            </div>
-          )}
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {pendentes.map(c => (
-              <div className="card shadow-sm" key={c.id}>
-                <div style={{ padding: 'var(--spacing-lg)' }}>
-                  {enviados[c.id] ? (
-                    <div className="alert alert-success" style={{ marginBottom: 0 }}>
-                      <span>✓</span>
-                      <span>Obrigado pela sua avaliação do chamado <strong>#{c.id}</strong>!</span>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="d-flex align-center justify-between mb-md">
-                        <span className="font-bold">#{c.id} — {c.titulo}</span>
-                        <span className="badge badge-secondary">{c.categoria}</span>
-                      </div>
-                      <p className="text-muted text-sm mb-lg">Concluído em {c.data}</p>
-
-                      <p className="form-label mb-md">Como avalia o atendimento?</p>
-                      <div className="stars mb-lg">
-                        {[1, 2, 3, 4, 5].map(n => (
-                          <span
-                            key={n}
-                            className={`star${(ratings[c.id] || 0) >= n ? ' filled' : ''}`}
-                            onClick={() => setRatings(r => ({ ...r, [c.id]: n }))}
-                          >★</span>
-                        ))}
-                        {ratings[c.id] && (
-                          <span style={{ marginLeft: 8, fontSize: 13, color: 'var(--color-text-secondary)' }}>
-                            {['', 'Péssimo', 'Ruim', 'Regular', 'Bom', 'Excelente'][ratings[c.id]]}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="form-group">
-                        <label className="form-label">Comentário (opcional)</label>
-                        <textarea className="form-control" rows={2} placeholder="Deixe seu comentário..."
-                          value={comentarios[c.id] || ''}
-                          onChange={e => setComentarios(r => ({ ...r, [c.id]: e.target.value }))}
-                        />
-                      </div>
-
-                      <button className="btn btn-primary btn-sm" onClick={() => enviar(c.id)}>Enviar avaliação</button>
-                    </>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      );
-    }
-
-    /* ═══════════════════════
-       PAGE: AGENDA
-    ═══════════════════════ */
-    function AgendaPage({ onToast }) {
-      const hoje = new Date();
-      const [ano, setAno] = useState(hoje.getFullYear());
-      const [mes, setMes] = useState(hoje.getMonth());
-      const [eventos, setEventos] = useState([
-        { data: '2024-03-18', titulo: 'Reunião de equipe' },
-        { data: '2024-03-22', titulo: 'Review de chamados' },
-        { data: '2024-03-25', titulo: 'Treinamento sistema' },
-      ]);
-      const [showModal, setShowModal] = useState(false);
-      const [diaSelected, setDiaSelected] = useState(null);
-      const [newEvento, setNewEvento] = useState('');
-
-      const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-      const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-
-      function getDiasDoMes() {
-        const primeiro = new Date(ano, mes, 1);
-        const ultimo = new Date(ano, mes + 1, 0);
-        const dias = [];
-        // preenche dias do mês anterior
-        for (let i = 0; i < primeiro.getDay(); i++) {
-          const d = new Date(ano, mes, -primeiro.getDay() + i + 1);
-          dias.push({ data: d, outro: true });
-        }
-        for (let d = 1; d <= ultimo.getDate(); d++) {
-          dias.push({ data: new Date(ano, mes, d), outro: false });
-        }
-        // completa semana
-        while (dias.length % 7 !== 0) {
-          const last = dias[dias.length - 1].data;
-          dias.push({ data: new Date(last.getFullYear(), last.getMonth(), last.getDate() + 1), outro: true });
-        }
-        return dias;
-      }
-
-      const dias = getDiasDoMes();
-      const dataStr = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-
-      function addEvento() {
-        if (!newEvento.trim()) return;
-        setEventos(ev => [...ev, { data: dataStr(diaSelected), titulo: newEvento }]);
-        onToast('Evento adicionado!', 'success');
-        setShowModal(false);
-        setNewEvento('');
-      }
-
-      const eventosDoMes = eventos.filter(e => e.data.startsWith(`${ano}-${String(mes+1).padStart(2,'0')}`));
-
-      return (
-        <div>
-          <div className="page-header">
-            <h1 className="page-title">Agenda</h1>
-            <button className="btn btn-primary btn-sm" onClick={() => { setDiaSelected(hoje); setShowModal(true); }}>+ Novo evento</button>
-          </div>
-
-          <div className="grid-2" style={{ gridTemplateColumns: '2fr 1fr', gap: 24 }}>
-            {/* Calendar */}
-            <div className="card shadow-sm">
-              <div style={{ padding: 'var(--spacing-lg)' }}>
-                <div className="d-flex align-center justify-between mb-lg">
-                  <button className="btn btn-secondary btn-sm" onClick={() => { if (mes === 0) { setMes(11); setAno(a => a-1); } else setMes(m => m-1); }}>‹</button>
-                  <strong style={{ fontSize: 'var(--size-3)' }}>{MESES[mes]} {ano}</strong>
-                  <button className="btn btn-secondary btn-sm" onClick={() => { if (mes === 11) { setMes(0); setAno(a => a+1); } else setMes(m => m+1); }}>›</button>
-                </div>
-
-                <div className="calendar-grid mb-sm">
-                  {DIAS_SEMANA.map(d => <div key={d} className="cal-header">{d}</div>)}
-                </div>
-                <div className="calendar-grid">
-                  {dias.map((d, i) => {
-                    const isToday = dataStr(d.data) === dataStr(hoje);
-                    const hasEv = eventos.some(e => e.data === dataStr(d.data));
-                    return (
-                      <div
-                        key={i}
-                        className={`cal-day${d.outro ? ' other-month' : ''}${isToday ? ' today' : ''}${hasEv ? ' has-event' : ''}`}
-                        onClick={() => { if (!d.outro) { setDiaSelected(d.data); setShowModal(true); } }}
-                      >
-                        {d.data.getDate()}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Eventos do mês */}
-            <div>
-              <div className="section-title">Eventos do mês</div>
-              {eventosDoMes.length === 0 ? (
-                <p className="text-muted text-sm">Nenhum evento este mês.</p>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {eventosDoMes.map((e, i) => (
-                    <div key={i} className="card card-bordered" style={{ padding: '10px 14px' }}>
-                      <p style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{e.data}</p>
-                      <p style={{ fontSize: 14, fontWeight: 600 }}>{e.titulo}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {showModal && (
-            <div className="modal-overlay" onClick={() => setShowModal(false)}>
-              <div className="modal" onClick={e => e.stopPropagation()}>
-                <div className="modal-header">
-                  <span className="modal-title">Novo evento — {diaSelected ? dataStr(diaSelected) : ''}</span>
-                  <button className="btn-close" onClick={() => setShowModal(false)}>✕</button>
-                </div>
-                <div className="modal-body">
-                  <div className="form-group">
-                    <label className="form-label">Título do evento *</label>
-                    <input className="form-control" placeholder="Ex: Reunião, Treinamento..." value={newEvento} onChange={e => setNewEvento(e.target.value)} onKeyDown={e => e.key === 'Enter' && addEvento()} />
-                  </div>
-                </div>
-                <div className="modal-footer">
-                  <button className="btn btn-secondary btn-sm" onClick={() => setShowModal(false)}>Cancelar</button>
-                  <button className="btn btn-primary btn-sm" onClick={addEvento}>Salvar</button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    /* ═══════════════════════
-       PAGE: ALTERAR SENHA
-    ═══════════════════════ */
-    function AlterarSenhaPage({ onToast }) {
-      const [form, setForm] = useState({ atual: '', nova: '', confirmar: '' });
-      const [errors, setErrors] = useState({});
-      const [loading, setLoading] = useState(false);
-
-      function validate() {
-        const e = {};
-        if (!form.atual) e.atual = 'Campo obrigatório';
-        if (!form.nova || form.nova.length < 8) e.nova = 'Mínimo 8 caracteres';
-        if (form.nova !== form.confirmar) e.confirmar = 'Senhas não conferem';
-        return e;
-      }
-
-      function submit(ev) {
-        ev.preventDefault();
-        const e = validate();
-        if (Object.keys(e).length > 0) { setErrors(e); return; }
-        setErrors({});
-        setLoading(true);
-        setTimeout(() => {
-          setLoading(false);
-          onToast('Senha alterada com sucesso!', 'success');
-          setForm({ atual: '', nova: '', confirmar: '' });
-        }, 1200);
-      }
-
-      const strength = form.nova.length === 0 ? 0 : form.nova.length < 6 ? 1 : form.nova.length < 10 ? 2 : form.nova.length < 14 ? 3 : 4;
-      const strengthLabel = ['', 'Fraca', 'Razoável', 'Boa', 'Forte'];
-      const strengthColor = ['', 'danger', 'warning', 'success', 'success'];
-
-      return (
-        <div>
-          <div className="page-header">
-            <h1 className="page-title">Alterar Senha</h1>
-          </div>
-
-          <div className="card shadow-sm" style={{ maxWidth: 480 }}>
-            <div style={{ padding: 'var(--spacing-xl)' }}>
-              <form onSubmit={submit}>
-                <div className="form-group">
-                  <label className="form-label">Senha atual *</label>
-                  <input type="password" className={`form-control${errors.atual ? ' invalid' : ''}`}
-                    value={form.atual} onChange={e => setForm({ ...form, atual: e.target.value })} />
-                  {errors.atual && <span className="input-error">{errors.atual}</span>}
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Nova senha *</label>
-                  <input type="password" className={`form-control${errors.nova ? ' invalid' : ''}`}
-                    value={form.nova} onChange={e => setForm({ ...form, nova: e.target.value })} />
-                  {errors.nova && <span className="input-error">{errors.nova}</span>}
-                  {form.nova.length > 0 && (
-                    <div style={{ marginTop: 8 }}>
-                      <div className="progress mb-sm">
-                        <div className={`progress-bar ${strengthColor[strength]}`} style={{ width: `${strength * 25}%` }} />
-                      </div>
-                      <span style={{ fontSize: 12, color: `var(--color-status-${strengthColor[strength]})` }}>
-                        Força: {strengthLabel[strength]}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Confirmar nova senha *</label>
-                  <input type="password" className={`form-control${errors.confirmar ? ' invalid' : ''}`}
-                    value={form.confirmar} onChange={e => setForm({ ...form, confirmar: e.target.value })} />
-                  {errors.confirmar && <span className="input-error">{errors.confirmar}</span>}
-                </div>
-
-                <div className="alert alert-info mt-lg">
-                  <span>ℹ</span>
-                  <div>
-                    <p style={{ fontWeight: 600, marginBottom: 4 }}>Requisitos de senha:</p>
-                    <p style={{ fontSize: 13 }}>• Mínimo de 8 caracteres</p>
-                    <p style={{ fontSize: 13 }}>• Ao menos uma letra maiúscula</p>
-                    <p style={{ fontSize: 13 }}>• Ao menos um número</p>
-                  </div>
-                </div>
-
-                <div className="d-flex gap-md mt-xl" style={{ justifyContent: 'flex-end' }}>
-                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setForm({ atual: '', nova: '', confirmar: '' })}>Cancelar</button>
-                  <button type="submit" className="btn btn-primary btn-sm" disabled={loading}>
-                    {loading ? <><span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} /> Salvando...</> : '✓ Alterar senha'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    /* ═══════════════════════
-       PAGE: USUÁRIO
-    ═══════════════════════ */
-    function UsuarioPage({ onToast }) {
-      const [editando, setEditando] = useState(false);
-      const [form, setForm] = useState({
-        nome: 'Igor Vilar de Almeida Costa',
-        email: 'igor.costa@pjus.com.br',
-        telefone: '(11) 99999-9999',
-        departamento: 'Tecnologia',
-        cargo: 'Analista de Sistemas',
-        ramal: '2042',
-      });
-      const [original, setOriginal] = useState({ ...form });
-
-      function salvar() {
-        setOriginal({ ...form });
-        setEditando(false);
-        onToast('Dados atualizados com sucesso!', 'success');
-      }
-      function cancelar() { setForm({ ...original }); setEditando(false); }
-
-      const fields = [
-        { label: 'Nome completo', key: 'nome' },
-        { label: 'E-mail', key: 'email', type: 'email' },
-        { label: 'Telefone', key: 'telefone' },
-        { label: 'Departamento', key: 'departamento' },
-        { label: 'Cargo', key: 'cargo' },
-        { label: 'Ramal', key: 'ramal' },
-      ];
-
-      return (
-        <div>
-          <div className="page-header">
-            <h1 className="page-title">Meu Perfil</h1>
-            {!editando && <button className="btn btn-secondary btn-sm" onClick={() => setEditando(true)}>✏ Editar</button>}
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 24, alignItems: 'start' }}>
-            {/* Avatar card */}
-            <div className="card shadow-sm" style={{ textAlign: 'center', padding: 'var(--spacing-xl)', minWidth: 180 }}>
-              <div className="sidebar-avatar" style={{ margin: '0 auto var(--spacing-lg)', width: 72, height: 72 }}>
-                <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-                  <circle cx="20" cy="14" r="8" fill="#adb5ba"/>
-                  <ellipse cx="20" cy="36" rx="14" ry="9" fill="#adb5ba"/>
-                </svg>
-              </div>
-              <p style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{form.nome.split(' ').slice(0, 2).join(' ')}</p>
-              <p className="text-muted" style={{ fontSize: 12 }}>{form.cargo}</p>
-              <p className="text-muted" style={{ fontSize: 12 }}>{form.departamento}</p>
-              <div style={{ marginTop: 12 }}>
-                <span className="badge badge-success">Ativo</span>
-              </div>
-            </div>
-
-            {/* Form card */}
-            <div className="card shadow-sm">
-              <div style={{ padding: 'var(--spacing-xl)' }}>
-                <div className="grid-2">
-                  {fields.map(f => (
-                    <div className="form-group" key={f.key}>
-                      <label className="form-label">{f.label}</label>
-                      <input
-                        type={f.type || 'text'}
-                        className="form-control"
-                        value={form[f.key]}
-                        readOnly={!editando}
-                        onChange={e => setForm({ ...form, [f.key]: e.target.value })}
-                      />
-                    </div>
-                  ))}
-                </div>
-                {editando && (
-                  <div className="d-flex gap-md mt-lg" style={{ justifyContent: 'flex-end' }}>
-                    <button className="btn btn-secondary btn-sm" onClick={cancelar}>Cancelar</button>
-                    <button className="btn btn-primary btn-sm" onClick={salvar}>✓ Salvar alterações</button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    /* ═══════════════════════
-       PAGE: AJUDA
-    ═══════════════════════ */
-    function AjudaPage() {
-      const [busca, setBusca] = useState('');
-      const artigos = [
-        { titulo: 'Como abrir um chamado', categoria: 'Chamados', conteudo: 'Para abrir um novo chamado, acesse o menu Chamados > Abertura.' },
-        { titulo: 'Como acompanhar meus chamados', categoria: 'Chamados', conteudo: 'Acesse Chamados > Meus Chamados para visualizar todos os seus chamados.' },
-        { titulo: 'Como alterar minha senha', categoria: 'Conta', conteudo: 'Acesse Configuração > Alterar Senha para modificar sua senha de acesso.' },
-        { titulo: 'Entendendo os status do SLA', categoria: 'SLA', conteudo: 'O SLA define o prazo de atendimento. Dentro do prazo = verde. Acima de 50% = amarelo.' },
-        { titulo: 'Como avaliar um atendimento', categoria: 'Qualidade', conteudo: 'Após a conclusão do chamado, acesse Chamados > Pesquisa Satisfação.' },
-        { titulo: 'Gerenciando sua agenda', categoria: 'Agenda', conteudo: 'Acesse Configuração > Agenda para adicionar e gerenciar seus compromissos.' },
-      ];
-
-      const filtrados = artigos.filter(a =>
-        a.titulo.toLowerCase().includes(busca.toLowerCase()) ||
-        a.categoria.toLowerCase().includes(busca.toLowerCase())
-      );
-
-      return (
-        <div>
-          <div className="page-header">
-            <h1 className="page-title">Central de Ajuda</h1>
-          </div>
-
-          <div style={{ maxWidth: 560, marginBottom: 'var(--spacing-xl)' }}>
-            <div className="input-group">
-              <input className="form-control" placeholder="Buscar artigos de ajuda..." value={busca} onChange={e => setBusca(e.target.value)} />
-              <button className="btn btn-primary" style={{ borderRadius: '0 4px 4px 0' }}>🔍 Buscar</button>
-            </div>
-          </div>
-
-          {filtrados.length === 0 ? (
-            <div className="empty-state">
-              <span className="empty-state-icon">🔍</span>
-              <span className="empty-state-text">Nenhum artigo encontrado para "{busca}"</span>
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
-              {filtrados.map((a, i) => (
-                <div key={i} className="card card-bordered shadow-sm" style={{ cursor: 'pointer', transition: 'box-shadow 0.15s' }}
-                  onMouseEnter={e => e.currentTarget.style.boxShadow = 'var(--shadow-md)'}
-                  onMouseLeave={e => e.currentTarget.style.boxShadow = 'var(--shadow-sm)'}
-                >
-                  <div style={{ padding: 'var(--spacing-lg)' }}>
-                    <span className="badge badge-info mb-md" style={{ display: 'inline-flex' }}>{a.categoria}</span>
-                    <p style={{ fontWeight: 700, marginBottom: 8, fontSize: 'var(--size-2)' }}>{a.titulo}</p>
-                    <p style={{ fontSize: 'var(--size-1)', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>{a.conteudo}</p>
-                    <div style={{ marginTop: 12 }}>
-                      <span className="text-pjus" style={{ fontSize: 12, fontWeight: 600 }}>Ler mais →</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    /* ═══════════════════════
-       APP ROOT
-    ═══════════════════════ */
-    function App() {
-      const [sidebarOpen, setSidebarOpen] = useState(true);
-      const [activePage, setActivePage] = useState('dashboard');
-      const [toasts, setToasts] = useState([]);
-
-      function addToast(msg, type = 'info') {
-        const id = Date.now();
-        setToasts(t => [...t, { id, msg, type }]);
-        setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3500);
-      }
-      function dismissToast(id) { setToasts(t => t.filter(x => x.id !== id)); }
-
-      function renderPage() {
-        switch (activePage) {
-          case 'dashboard': return <Dashboard />;
-          case 'abertura': return <AberturaPage onToast={addToast} />;
-          case 'meus-chamados': return <MeusChamadosPage onToast={addToast} />;
-          case 'pesquisa': return <PesquisaPage onToast={addToast} />;
-          case 'agenda': return <AgendaPage onToast={addToast} />;
-          case 'alterar-senha': return <AlterarSenhaPage onToast={addToast} />;
-          case 'usuario': return <UsuarioPage onToast={addToast} />;
-          case 'ajuda': return <AjudaPage />;
-          default: return <Dashboard />;
-        }
-      }
-
-      return (
-        <div className="app">
-          <Sidebar
-            collapsed={!sidebarOpen}
-            activePage={activePage}
-            onNavigate={setActivePage}
-            onClose={() => setSidebarOpen(false)}
-          />
-
-          <div className="main">
-            <Topbar
-              onToggleSidebar={() => setSidebarOpen(o => !o)}
-              activePage={activePage}
-              onNavigate={setActivePage}
-            />
-            <Subtoolbar onNavigate={setActivePage} />
-            <div className="content">
-              {renderPage()}
-            </div>
-          </div>
-
-          <ToastContainer toasts={toasts} onDismiss={dismissToast} />
-        </div>
-      );
-    }
-
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-  </script>
+        <button class="btn btn-primary btn-sm" onclick="enviarAvaliacao(${c.id})">Enviar avaliação</button>
+      </div>`;
+  }).join('');
+  return `
+  <div class="page-header"><h1 class="page-title">Pesquisa de Satisfação</h1></div>
+  <div class="alert alert-info mb-lg"><span>ℹ</span><span>Avalie os chamados concluídos para nos ajudar a melhorar o serviço.</span></div>
+  ${pendentes.length===0?`<div class="empty"><span class="empty-ico">🎉</span><span class="empty-txt">Nenhum chamado pendente de avaliação!</span></div>`:cards}`;
+}
+function setRating(id, n) {
+  ratings[id] = n;
+  const lbls = ['','Péssimo','Ruim','Regular','Bom','Excelente'];
+  const cont = document.getElementById('stars-'+id);
+  if (!cont) return;
+  cont.innerHTML = [1,2,3,4,5].map(x=>`<span class="star${n>=x?' on':''}" onclick="setRating(${id},${x})">★</span>`).join('')
+    + `<span style="margin-left:8px;font-size:12px;color:var(--text-secondary)">${lbls[n]}</span>`;
+}
+function enviarAvaliacao(id) {
+  if (!ratings[id]) { toast('Selecione uma avaliação antes de enviar.','e'); return; }
+  enviados[id] = true;
+  toast('Avaliação enviada com sucesso!','s');
+  document.getElementById('content').innerHTML = renderPesquisa();
+}
+
+/* ═══════════════════════════════
+   AGENDA
+═══════════════════════════════ */
+function renderAgenda() {
+  const evMes = events.filter(e=>e.data.startsWith(`${calAno}-${String(calMes+1).padStart(2,'0')}`));
+  return `
+  <div class="page-header">
+    <h1 class="page-title">Agenda</h1>
+    <button class="btn btn-primary btn-sm" onclick="novoEvento()">+ Novo evento</button>
+  </div>
+  <div class="g2-1">
+    <div class="card">
+      <div class="flex ai jb mb-lg">
+        <button class="btn btn-secondary btn-sm" onclick="mudarMes(-1)">‹</button>
+        <strong style="font-size:14px">${MESES[calMes]} ${calAno}</strong>
+        <button class="btn btn-secondary btn-sm" onclick="mudarMes(1)">›</button>
+      </div>
+      <div class="cal-grid mb-sm">${DIAS_SEM.map(d=>`<div class="cal-hd">${d}</div>`).join('')}</div>
+      <div class="cal-grid" id="cal-days"></div>
+    </div>
+    <div>
+      <div class="section-title">Eventos do mês</div>
+      ${evMes.length===0?`<p class="text-muted text-sm">Nenhum evento este mês.</p>`:
+        evMes.map(e=>`<div class="card card-bordered mb-md" style="padding:10px 14px"><p class="text-xs text-muted">${e.data}</p><p class="semi text-sm">${e.titulo}</p></div>`).join('')}
+    </div>
+  </div>`;
+}
+function initCal() {
+  setTimeout(()=>{
+    const el = document.getElementById('cal-days');
+    if (!el) return;
+    const primeiro = new Date(calAno,calMes,1);
+    const ultimo = new Date(calAno,calMes+1,0);
+    const hoje = new Date();
+    const dias = [];
+    for(let i=0;i<primeiro.getDay();i++) { const d=new Date(calAno,calMes,1-primeiro.getDay()+i); dias.push({d,outro:true}); }
+    for(let d=1;d<=ultimo.getDate();d++) dias.push({d:new Date(calAno,calMes,d),outro:false});
+    while(dias.length%7!==0) { const last=dias[dias.length-1].d; dias.push({d:new Date(last.getFullYear(),last.getMonth(),last.getDate()+1),outro:true}); }
+    el.innerHTML = dias.map(({d,outro})=>{
+      const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      const isToday = d.toDateString()===hoje.toDateString();
+      const hasEv = events.some(e=>e.data===ds);
+      return `<div class="cal-day${outro?' other':''}${isToday?' today':''}${hasEv?' has-ev':''}" onclick="${!outro?`calDayClick('${ds}')`:''}">${d.getDate()}</div>`;
+    }).join('');
+  },30);
+}
+function mudarMes(d) {
+  calMes+=d;
+  if(calMes<0){calMes=11;calAno--;}
+  if(calMes>11){calMes=0;calAno++;}
+  document.getElementById('content').innerHTML=renderAgenda();
+  initCal();
+}
+function calDayClick(ds) { novoEvento(ds); }
+function novoEvento(ds='') {
+  openModal('Novo evento',
+    `<div class="form-group"><label class="form-label">Data</label><input class="form-control" id="ev-data" type="date" value="${ds}"/></div>
+     <div class="form-group"><label class="form-label">Título *</label><input class="form-control" id="ev-tit" placeholder="Ex: Reunião, treinamento..."/></div>`,
+    `<button class="btn btn-secondary btn-sm" onclick="closeModal()">Cancelar</button>
+     <button class="btn btn-primary btn-sm" onclick="salvarEvento()">Salvar</button>`);
+}
+function salvarEvento() {
+  const tit = document.getElementById('ev-tit')?.value?.trim();
+  const data = document.getElementById('ev-data')?.value;
+  if (!tit) { toast('Informe o título do evento.','e'); return; }
+  events.push({data:data||`${calAno}-${String(calMes+1).padStart(2,'0')}-01`,titulo:tit});
+  closeModal();
+  toast('Evento adicionado!','s');
+  document.getElementById('content').innerHTML=renderAgenda();
+  initCal();
+}
+
+/* ═══════════════════════════════
+   ALTERAR SENHA
+═══════════════════════════════ */
+function renderAlterarSenha() {
+  return `
+  <div class="page-header"><h1 class="page-title">Alterar Senha</h1></div>
+  <div class="card" style="max-width:460px">
+    <div class="form-group">
+      <label class="form-label">Senha atual *</label>
+      <input type="password" class="form-control" id="pw-atual" oninput=""/>
+      <span class="input-error hidden" id="err-atual">Campo obrigatório</span>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nova senha *</label>
+      <input type="password" class="form-control" id="pw-nova" oninput="checkSenhaStrength(this.value)"/>
+      <span class="input-error hidden" id="err-nova">Mínimo 8 caracteres</span>
+      <div style="margin-top:8px" id="pw-strength-wrap" class="hidden">
+        <div class="progress mb-sm"><div class="progress-bar" id="pw-bar" style="width:0%"></div></div>
+        <span id="pw-lbl" style="font-size:11px"></span>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Confirmar nova senha *</label>
+      <input type="password" class="form-control" id="pw-conf"/>
+      <span class="input-error hidden" id="err-conf">Senhas não conferem</span>
+    </div>
+    <div class="alert alert-info mt-lg">
+      <span>ℹ</span>
+      <div><p class="semi mb-sm">Requisitos de senha:</p>
+        <p style="font-size:12px">• Mínimo de 8 caracteres</p>
+        <p style="font-size:12px">• Ao menos uma letra maiúscula</p>
+        <p style="font-size:12px">• Ao menos um número</p></div>
+    </div>
+    <div class="flex je gap-md mt-xl">
+      <button class="btn btn-secondary btn-sm" onclick="document.querySelectorAll('#content input').forEach(i=>i.value='')">Cancelar</button>
+      <button class="btn btn-primary btn-sm" id="btn-save-pw" onclick="salvarSenha()">✓ Alterar senha</button>
+    </div>
+  </div>`;
+}
+function checkSenhaStrength(v) {
+  const w = document.getElementById('pw-strength-wrap');
+  const bar = document.getElementById('pw-bar');
+  const lbl = document.getElementById('pw-lbl');
+  if (!w) return;
+  if (!v) { w.classList.add('hidden'); return; }
+  w.classList.remove('hidden');
+  const strength = v.length<6?1:v.length<8?2:v.length<12?3:4;
+  const cls = ['','pb-danger','pb-warning','pb-success','pb-success'];
+  const labels = ['','Fraca','Razoável','Boa','Forte'];
+  const colors = ['','var(--danger)','var(--warning)','var(--success)','var(--success)'];
+  bar.className = 'progress-bar '+cls[strength];
+  bar.style.width = (strength*25)+'%';
+  lbl.textContent = 'Força: '+labels[strength];
+  lbl.style.color = colors[strength];
+}
+function salvarSenha() {
+  const atual = document.getElementById('pw-atual')?.value;
+  const nova = document.getElementById('pw-nova')?.value;
+  const conf = document.getElementById('pw-conf')?.value;
+  let ok = true;
+  if (!atual) { document.getElementById('err-atual').classList.remove('hidden'); ok=false; } else document.getElementById('err-atual').classList.add('hidden');
+  if (!nova||nova.length<8) { document.getElementById('err-nova').classList.remove('hidden'); ok=false; } else document.getElementById('err-nova').classList.add('hidden');
+  if (nova!==conf) { document.getElementById('err-conf').classList.remove('hidden'); ok=false; } else document.getElementById('err-conf').classList.add('hidden');
+  if (!ok) return;
+  const btn = document.getElementById('btn-save-pw');
+  btn.disabled=true; btn.textContent='Salvando...';
+  setTimeout(()=>{ toast('Senha alterada com sucesso!','s'); navigate('alterar-senha'); },1200);
+}
+
+/* ═══════════════════════════════
+   USUÁRIO
+═══════════════════════════════ */
+let userEditing = false;
+const userFields = [
+  {k:'nome',l:'Nome completo'},{k:'email',l:'E-mail',t:'email'},
+  {k:'telefone',l:'Telefone'},{k:'departamento',l:'Departamento'},
+  {k:'cargo',l:'Cargo'},{k:'ramal',l:'Ramal'}
+];
+let userData = {nome:'Igor Vilar de Almeida Costa',email:'igor.costa@pjus.com.br',telefone:'(11) 99999-9999',departamento:'Tecnologia',cargo:'Analista de Sistemas',ramal:'2042'};
+
+function renderUsuario() {
+  const fields = userFields.map(f=>`
+    <div class="form-group">
+      <label class="form-label">${f.l}</label>
+      <input type="${f.t||'text'}" class="form-control" id="u-${f.k}" value="${userData[f.k]}" ${userEditing?'':'readonly'}/>
+    </div>`).join('');
+  return `
+  <div class="page-header">
+    <h1 class="page-title">Meu Perfil</h1>
+    ${!userEditing?`<button class="btn btn-secondary btn-sm" onclick="userEditing=true;navigate('usuario')">✏ Editar</button>`:''}
+  </div>
+  <div class="flex gap-lg ai" style="align-items:flex-start">
+    <div class="card" style="text-align:center;padding:22px;min-width:170px">
+      <div class="sb-avatar" style="margin:0 auto 12px;width:66px;height:66px">
+        <svg width="36" height="36" viewBox="0 0 36 36" fill="none"><circle cx="18" cy="12" r="7" fill="#9aabb0"/><ellipse cx="18" cy="30" rx="12" ry="8" fill="#9aabb0"/></svg>
+      </div>
+      <p class="bold text-sm mb-sm">${userData.nome.split(' ').slice(0,2).join(' ')}</p>
+      <p class="text-muted text-xs mb-sm">${userData.cargo}</p>
+      <p class="text-muted text-xs mb-md">${userData.departamento}</p>
+      <span class="badge b-success">Ativo</span>
+    </div>
+    <div class="card flex-1">
+      <div class="g2">${fields}</div>
+      ${userEditing?`
+      <div class="flex je gap-md mt-lg">
+        <button class="btn btn-secondary btn-sm" onclick="userEditing=false;navigate('usuario')">Cancelar</button>
+        <button class="btn btn-primary btn-sm" onclick="salvarUsuario()">✓ Salvar alterações</button>
+      </div>`:''}
+    </div>
+  </div>`;
+}
+function salvarUsuario() {
+  userFields.forEach(f=>{ const el=document.getElementById('u-'+f.k); if(el) userData[f.k]=el.value; });
+  userEditing=false;
+  toast('Dados atualizados com sucesso!','s');
+  navigate('usuario');
+}
+
+/* ═══════════════════════════════
+   AJUDA
+═══════════════════════════════ */
+const ARTIGOS = [
+  {titulo:'Como abrir um chamado',cat:'Chamados',texto:'Acesse o menu Chamados > Abertura e preencha o formulário em 3 etapas.'},
+  {titulo:'Como acompanhar meus chamados',cat:'Chamados',texto:'Acesse Chamados > Meus Chamados para ver todos os seus chamados e o status de cada um.'},
+  {titulo:'Como alterar minha senha',cat:'Conta',texto:'Acesse Configuração > Alterar Senha. A senha deve ter mínimo 8 caracteres.'},
+  {titulo:'Entendendo os status do SLA',cat:'SLA',texto:'Verde = dentro do prazo. Amarelo = acima de 50% do prazo. Vermelho = prazo estourado.'},
+  {titulo:'Como avaliar um atendimento',cat:'Qualidade',texto:'Após conclusão do chamado, acesse Chamados > Pesquisa Satisfação e dê sua nota.'},
+  {titulo:'Gerenciando sua agenda',cat:'Agenda',texto:'Acesse Configuração > Agenda para criar e gerenciar eventos e compromissos.'},
+];
+let ajudaBusca = '';
+function renderAjuda() {
+  const filtrados = ARTIGOS.filter(a=>a.titulo.toLowerCase().includes(ajudaBusca.toLowerCase())||a.cat.toLowerCase().includes(ajudaBusca.toLowerCase()));
+  const cards = filtrados.map(a=>`
+    <div class="card card-bordered" style="cursor:pointer;transition:box-shadow .15s" onmouseenter="this.style.boxShadow='var(--shadow-md)'" onmouseleave="this.style.boxShadow='var(--shadow-sm)'">
+      <span class="badge b-info mb-md" style="display:inline-flex">${a.cat}</span>
+      <p class="bold text-sm mb-md">${a.titulo}</p>
+      <p class="text-xs text-muted" style="line-height:1.5">${a.texto}</p>
+      <p class="text-pjus semi mt-md" style="font-size:12px">Ler mais →</p>
+    </div>`).join('');
+  return `
+  <div class="page-header"><h1 class="page-title">Central de Ajuda</h1></div>
+  <div style="max-width:520px;margin-bottom:22px">
+    <div class="input-group">
+      <input class="form-control" placeholder="Buscar artigos de ajuda..." value="${ajudaBusca}"
+        oninput="ajudaBusca=this.value;document.getElementById('ajuda-cards').innerHTML=renderAjudaCards()"/>
+      <button class="btn btn-primary">🔍</button>
+    </div>
+  </div>
+  <div id="ajuda-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px">
+    ${filtrados.length===0?`<div class="empty"><span class="empty-ico">🔍</span><span class="empty-txt">Nenhum artigo encontrado</span></div>`:cards}
+  </div>`;
+}
+function renderAjudaCards() {
+  const filtrados = ARTIGOS.filter(a=>a.titulo.toLowerCase().includes(ajudaBusca.toLowerCase())||a.cat.toLowerCase().includes(ajudaBusca.toLowerCase()));
+  if (filtrados.length===0) return `<div class="empty" style="grid-column:1/-1"><span class="empty-ico">🔍</span><span class="empty-txt">Nenhum artigo encontrado</span></div>`;
+  return filtrados.map(a=>`
+    <div class="card card-bordered" style="cursor:pointer;transition:box-shadow .15s" onmouseenter="this.style.boxShadow='var(--shadow-md)'" onmouseleave="this.style.boxShadow='var(--shadow-sm)'">
+      <span class="badge b-info mb-md" style="display:inline-flex">${a.cat}</span>
+      <p class="bold text-sm mb-md">${a.titulo}</p>
+      <p class="text-xs text-muted" style="line-height:1.5">${a.texto}</p>
+      <p class="text-pjus semi mt-md" style="font-size:12px">Ler mais →</p>
+    </div>`).join('');
+}
+
+/* ═══════════════════════════════
+   INIT
+═══════════════════════════════ */
+navigate('dashboard');
+</script>
 </body>
 </html>
