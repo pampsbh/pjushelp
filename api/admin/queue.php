@@ -28,7 +28,7 @@ $total = (int)$cntStmt->fetchColumn();
 $listStmt = $db->prepare("
     SELECT t.id, t.status, t.is_priority, t.sla_deadline, t.sla_breached,
            t.created_at, t.updated_at, t.priority_reason, t.sla_hours,
-           t.assigned_to, t.assigned_at, t.assignment_type,
+           t.assigned_to, t.assigned_at, t.assignment_type, t.reopen_count,
            u.name   AS user_name,
            d.name   AS department_name,
            sv.name  AS service_name,

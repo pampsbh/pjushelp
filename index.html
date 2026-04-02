@@ -104,6 +104,30 @@ textarea.form-control{resize:vertical;min-height:80px}
 .badge-gerente{background:#dbeafe;color:#1e40af}.badge-estagiario{background:#dcfce7;color:#166534}
 .badge-sla-ok{background:#d1fae5;color:#065f46}.badge-sla-warn{background:#fef3c7;color:#92400e}
 .badge-sla-breach{background:#fee2e2;color:#991b1b}
+.badge-resolved-cat{background:#d1fae5;color:#065f46}
+.badge-not_reproducible{background:#f3f4f6;color:#374151}
+.badge-duplicate{background:#fef3c7;color:#92400e}
+.badge-cancelled_by_user{background:#fee2e2;color:#9f1239}
+
+/* REOPEN BANNER */
+.reopen-banner{padding:14px 18px;border-radius:var(--radius);margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:13px}
+.reopen-banner.can-reopen{background:color-mix(in srgb,var(--success) 10%,white);border:1px solid color-mix(in srgb,var(--success) 25%,white)}
+.reopen-banner.duplicate-warn{background:color-mix(in srgb,var(--warning) 10%,white);border:1px solid color-mix(in srgb,var(--warning) 25%,white)}
+.reopen-banner.expired{background:var(--gray-50);border:1px solid var(--gray-100)}
+
+/* RELATIONS */
+.relations-list{border:1px solid var(--gray-100);border-radius:var(--radius);overflow:hidden}
+.relation-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--gray-100);font-size:13px}
+.relation-item:last-child{border-bottom:none}
+.rel-type-tag{font-size:10px;font-weight:700;text-transform:uppercase;padding:2px 7px;border-radius:12px;white-space:nowrap}
+.rel-type-related{background:#dbeafe;color:#1d4ed8}.rel-type-duplicate{background:#fef3c7;color:#92400e}
+
+/* AUTOCOMPLETE */
+.autocomplete-results{border:1px solid var(--gray-100);border-top:none;border-radius:0 0 var(--radius) var(--radius);background:#fff;max-height:200px;overflow-y:auto;position:absolute;width:100%;z-index:10;box-shadow:var(--shadow-md)}
+.autocomplete-item{padding:9px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--gray-100)}
+.autocomplete-item:last-child{border-bottom:none}
+.autocomplete-item:hover{background:var(--gray-50)}
+.autocomplete-wrap{position:relative}
 
 /* TABLE */
 .table-wrap{overflow-x:auto}
@@ -663,7 +687,7 @@ async function renderMyQueue() {
         <td>${t.is_priority==1?'🔥':'—'}</td><td>${slaColorBadge(t)}</td><td>${statusBadge(t.status)}</td>
         <td style="display:flex;gap:6px;flex-wrap:wrap">
           ${t.status==='open'?`<button class="btn btn-warning btn-sm" onclick="startTicket(${t.id})">Iniciar</button>`:''}
-          ${t.status!=='resolved'&&t.status!=='closed'?`<button class="btn btn-success btn-sm" onclick="resolveModal(${t.id})">Resolver</button>`:''}
+          ${t.status!=='resolved'&&t.status!=='closed'?`<button class="btn btn-success btn-sm" onclick="openResolveModal(${t.id})">Resolver</button>`:''}
           <button class="action-btn" onclick="viewTicket(${t.id})">Ver</button>
         </td>
       </tr>`).join('')}
@@ -675,38 +699,200 @@ async function startTicket(id){
   try{await api(`/tickets.php?id=${id}`,{method:'PATCH',body:JSON.stringify({status:'in_progress'})});toast('Atendimento iniciado!');renderMyQueue();}catch(e){toast(e.message,false);}
 }
 
-function resolveModal(id){
-  openModal('Resolver Chamado #'+id,
-    `<div class="form-group"><label class="form-label">Descrição da resolução <span style="color:var(--danger)">*</span></label><textarea id="resolve-obs" class="form-control" rows="4" placeholder="Descreva como o chamado foi resolvido..."></textarea></div>`,
-    `<button class="btn btn-outline" onclick="closeModal()">Cancelar</button><button class="btn btn-success" onclick="doResolve(${id})">Confirmar Resolução</button>`
+// ── MODAL DE RESOLUÇÃO ────────────────────────────────────────────────────────
+let _resolveId = null, _resolveCategories = [], _resolveDuplicates = [];
+
+async function openResolveModal(id) {
+  _resolveId = id;
+  try {
+    const [cats, rels] = await Promise.all([
+      api('/resolution-categories.php'),
+      api(`/ticket-relations.php?id=${id}`),
+    ]);
+    _resolveCategories = cats;
+    _resolveDuplicates = rels.filter(r =>
+      r.relation_type === 'duplicate' && ['open','in_progress'].includes(r.related_status)
+    );
+  } catch { _resolveCategories = []; _resolveDuplicates = []; }
+
+  const catOpts = _resolveCategories.map(c =>
+    `<option value="${c.id}" data-slug="${c.slug}">${c.label}</option>`
+  ).join('');
+
+  const batchHtml = _resolveDuplicates.length ? `
+    <div id="rc-batch" style="margin-top:14px;padding:14px;background:var(--gray-50);border-radius:var(--radius);border:1px solid var(--gray-100)">
+      <div style="font-size:13px;font-weight:700;margin-bottom:8px">Chamados duplicados que também podem ser fechados:</div>
+      ${_resolveDuplicates.map(d=>`
+        <label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer">
+          <input type="checkbox" class="batch-dup-cb" value="${d.related_id}" checked/>
+          <b>#${d.related_id}</b> — ${d.service_name} — ${d.user_name} — ${statusBadge(d.related_status)}
+        </label>`).join('')}
+    </div>` : '';
+
+  openModal(`Fechar Chamado #${id}`, `
+    <div class="form-group">
+      <label class="form-label">Como foi resolvido? <span style="color:var(--danger)">*</span></label>
+      <select id="rc-cat" class="form-control" onchange="onResolveCatChange()">
+        <option value="">— selecione —</option>${catOpts}
+      </select>
+    </div>
+    <div id="rc-dup-section" style="display:none">
+      <div class="form-group">
+        <label class="form-label">Chamado original <span style="color:var(--danger)">*</span></label>
+        <div class="autocomplete-wrap">
+          <input id="rc-dup-input" class="form-control" placeholder="Buscar por #ID ou descrição..."
+            oninput="searchDupTicket(this.value,${id})"/>
+          <div id="rc-dup-results" class="autocomplete-results" style="display:none"></div>
+        </div>
+        <input type="hidden" id="rc-dup-id"/>
+        <div id="rc-dup-sel" style="margin-top:5px;font-size:12px;color:var(--success);font-weight:700"></div>
+      </div>
+    </div>
+    <div id="rc-notes-section" style="display:none">
+      <div class="form-group">
+        <label class="form-label">Observações <span style="color:var(--danger)">*</span>
+          <span style="font-weight:400;color:var(--text-muted)" id="rc-notes-hint"></span>
+        </label>
+        <textarea id="rc-notes" class="form-control" rows="3" placeholder="Mínimo 20 caracteres..."></textarea>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notas internas <span style="color:var(--text-muted);font-weight:400">(opcional)</span></label>
+      <textarea id="rc-extra" class="form-control" rows="2" placeholder="Informações adicionais..."></textarea>
+    </div>
+    ${batchHtml}`,
+    `<button class="btn btn-outline" onclick="closeModal()">Cancelar</button>
+     <button class="btn btn-success" onclick="doResolve(${id})">Fechar Chamado</button>`
   );
 }
 
-async function doResolve(id){
-  const obs=document.getElementById('resolve-obs').value.trim();
-  if (!obs){toast('Informe a resolução',false);return;}
-  try{await api(`/tickets.php?id=${id}`,{method:'PATCH',body:JSON.stringify({status:'resolved',observation:obs})});toast('Chamado resolvido!');closeModal();renderMyQueue();}catch(e){toast(e.message,false);}
+function onResolveCatChange() {
+  const sel  = document.getElementById('rc-cat');
+  const slug = sel.options[sel.selectedIndex]?.dataset?.slug || '';
+  document.getElementById('rc-dup-section').style.display   = slug === 'duplicate'                              ? '' : 'none';
+  document.getElementById('rc-notes-section').style.display = (slug === 'not_reproducible' || slug === 'duplicate') ? '' : 'none';
+  const hint = document.getElementById('rc-notes-hint');
+  if (hint) hint.textContent =
+    slug === 'not_reproducible' ? '(obrigatório — por que não foi possível reproduzir)' :
+    slug === 'duplicate'        ? '(obrigatório — descreva o vínculo com o chamado original)' : '';
+  if (slug !== 'duplicate') { document.getElementById('rc-dup-id').value=''; document.getElementById('rc-dup-sel').textContent=''; }
+}
+
+let _dupTimer = null;
+function searchDupTicket(q, excludeId) {
+  clearTimeout(_dupTimer);
+  const res = document.getElementById('rc-dup-results');
+  if (!q.trim()) { res.style.display='none'; return; }
+  _dupTimer = setTimeout(async () => {
+    try {
+      const data = await api(`/tickets-search.php?q=${encodeURIComponent(q)}&excludeId=${excludeId}`);
+      if (!data.length) { res.innerHTML=`<div class="autocomplete-item" style="color:var(--text-muted)">Nenhum chamado encontrado</div>`; res.style.display=''; return; }
+      const labels = {open:'Aberto',in_progress:'Em andamento',resolved:'Resolvido',closed:'Fechado'};
+      res.innerHTML = data.map(t =>
+        `<div class="autocomplete-item" onclick="selectDupTicket(${t.id},'${esc(t.service_name)} — ${esc(t.user_name)} — ${labels[t.status]||t.status}')">
+          <b>#${t.id}</b> — ${esc(t.service_name)} — ${esc(t.user_name)} — ${statusBadge(t.status)}
+        </div>`
+      ).join('');
+      res.style.display = '';
+    } catch {}
+  }, 300);
+}
+
+function selectDupTicket(id, label) {
+  document.getElementById('rc-dup-id').value    = id;
+  document.getElementById('rc-dup-input').value = `#${id}`;
+  document.getElementById('rc-dup-sel').textContent = `✓ Selecionado: #${id} — ${label}`;
+  document.getElementById('rc-dup-results').style.display = 'none';
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+async function doResolve(id) {
+  const sel   = document.getElementById('rc-cat');
+  const catId = parseInt(sel?.value);
+  const slug  = sel?.options[sel.selectedIndex]?.dataset?.slug || '';
+  const notes = document.getElementById('rc-notes')?.value.trim()  || '';
+  const extra = document.getElementById('rc-extra')?.value.trim()  || '';
+  const dupId = parseInt(document.getElementById('rc-dup-id')?.value || 0);
+
+  if (!catId) { toast('Selecione a categoria de resolução', false); return; }
+  if ((slug === 'not_reproducible' || slug === 'duplicate') && notes.length < 20) {
+    toast('Observações obrigatórias (mínimo 20 caracteres)', false); return;
+  }
+  if (slug === 'duplicate' && !dupId) { toast('Selecione o chamado original', false); return; }
+
+  const batchDuplicates = Array.from(document.querySelectorAll('.batch-dup-cb:checked')).map(cb => parseInt(cb.value));
+
+  try {
+    await api(`/tickets.php?id=${id}&action=resolve`, { method:'PATCH', body: JSON.stringify({
+      status: 'closed',
+      resolutionCategoryId: catId,
+      resolutionNotes: notes || extra || null,
+      duplicateOfId: dupId || null,
+      batchDuplicates,
+    })});
+    toast('Chamado fechado!');
+    closeModal();
+    if (S.view==='my-queue') renderMyQueue();
+    else if (S.view==='admin-tickets') renderAdminTickets(adminPage);
+    else if (S.view==='my-tickets') renderMyTickets(myPage);
+  } catch(e) { toast(e.message, false); }
 }
 
 // ── VIEW: ADMIN DASHBOARD ─────────────────────────────────────────────────────
 async function renderDashboard() {
   try {
-    const [m,monthly,byDept]=await Promise.all([api('/admin/metrics.php'),api('/admin/metrics.php?type=monthly'),api('/admin/metrics.php?type=by-dept')]);
+    const [m,monthly,byDept,resCats,quality]=await Promise.all([
+      api('/admin/metrics.php'),
+      api('/admin/metrics.php?type=monthly'),
+      api('/admin/metrics.php?type=by-dept'),
+      api('/admin/metrics.php?type=resolution-cats'),
+      api('/admin/metrics.php?type=quality'),
+    ]);
     document.getElementById('content').innerHTML=`
-      <div class="metrics-grid">
-        <div class="metric-card"><div class="metric-label">Chamados Abertos</div><div class="metric-value">${m.open}</div><div class="metric-sub">em andamento ou aguardando</div></div>
-        <div class="metric-card warn"><div class="metric-label">Prioritários Abertos</div><div class="metric-value">${m.priority}</div><div class="metric-sub">requerem atenção imediata</div></div>
+      <div class="metrics-grid" style="grid-template-columns:repeat(6,1fr)">
+        <div class="metric-card"><div class="metric-label">Chamados Abertos</div><div class="metric-value">${m.open}</div><div class="metric-sub">aguardando ou em andamento</div></div>
+        <div class="metric-card warn"><div class="metric-label">Prioritários</div><div class="metric-value">${m.priority}</div><div class="metric-sub">abertos e prioritários</div></div>
         <div class="metric-card danger"><div class="metric-label">SLA Vencido</div><div class="metric-value">${m.breached}</div><div class="metric-sub">prazo ultrapassado</div></div>
         <div class="metric-card success"><div class="metric-label">Resolvidos no Prazo</div><div class="metric-value">${m.resolution_rate}%</div><div class="metric-sub">mês atual</div></div>
+        <div class="metric-card warn"><div class="metric-label">Reaberturas</div><div class="metric-value">${m.reopened||0}</div><div class="metric-sub">total de chamados reabertos</div></div>
+        <div class="metric-card ${(m.reopen_rate||0)>10?'danger':''}"><div class="metric-label">Taxa Reabertura</div><div class="metric-value">${m.reopen_rate||0}%</div><div class="metric-sub">mês atual</div></div>
       </div>
       <div class="charts-grid">
         <div class="card"><div class="card-header"><span class="card-title">Chamados por Mês</span></div><div class="card-body"><canvas id="chart-monthly" height="200"></canvas></div></div>
         <div class="card"><div class="card-header"><span class="card-title">Por Departamento</span></div><div class="card-body"><canvas id="chart-dept" height="200"></canvas></div></div>
+      </div>
+      <div class="charts-grid">
+        <div class="card"><div class="card-header"><span class="card-title">Qualidade de Resolução (últimos 6 meses)</span></div><div class="card-body"><canvas id="chart-quality" height="200"></canvas></div></div>
+        <div class="card"><div class="card-header"><span class="card-title">Categorias de Resolução (mês atual)</span></div><div class="card-body"><canvas id="chart-rescats" height="200"></canvas></div></div>
       </div>`;
-    const primary=getComputedStyle(document.documentElement).getPropertyValue('--primary').trim()||'#0061D6';
-    const success=getComputedStyle(document.documentElement).getPropertyValue('--success').trim()||'#0E8557';
+
+    const cs = getComputedStyle(document.documentElement);
+    const primary = cs.getPropertyValue('--primary').trim()||'#0061D6';
+    const success = cs.getPropertyValue('--success').trim()||'#0E8557';
+    const warning = cs.getPropertyValue('--warning').trim()||'#FEC33C';
+    const danger  = cs.getPropertyValue('--danger').trim()||'#FF4D4F';
+
     S.charts.monthly=new Chart(document.getElementById('chart-monthly'),{type:'bar',data:{labels:monthly.map(m=>m.label),datasets:[{label:'Abertos',data:monthly.map(m=>m.opened),backgroundColor:primary+'33',borderColor:primary,borderWidth:2},{label:'Resolvidos',data:monthly.map(m=>m.resolved),backgroundColor:success+'33',borderColor:success,borderWidth:2}]},options:{responsive:true,plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});
-    S.charts.dept=new Chart(document.getElementById('chart-dept'),{type:'doughnut',data:{labels:byDept.map(d=>d.department),datasets:[{data:byDept.map(d=>d.total),backgroundColor:[primary,'#0E8557','#FEC33C','#FF4D4F'],hoverOffset:4}]},options:{responsive:true,plugins:{legend:{position:'bottom'}}}});
+    S.charts.dept=new Chart(document.getElementById('chart-dept'),{type:'doughnut',data:{labels:byDept.map(d=>d.department),datasets:[{data:byDept.map(d=>d.total),backgroundColor:[primary,success,warning,danger,'#8b5cf6','#06b6d4'],hoverOffset:4}]},options:{responsive:true,plugins:{legend:{position:'bottom'}}}});
+
+    // Qualidade de resolução — barras empilhadas por categoria
+    const slugColors = {resolved:success,not_reproducible:'#9ca3af',duplicate:warning,cancelled_by_user:danger,unknown:'#d1d5db'};
+    const slugLabels = {resolved:'Resolvido',not_reproducible:'Não reproduzível',duplicate:'Duplicado',cancelled_by_user:'Cancelado',unknown:'Sem categoria'};
+    const months = [...new Set(quality.map(q=>q.month))].sort();
+    const monthLabels = quality.filter(q=>months.indexOf(q.month)>=0).reduce((acc,q)=>{acc[q.month]=q.label;return acc;},{});
+    const slugs = [...new Set(quality.map(q=>q.slug))];
+    const qualityDatasets = slugs.map(slug=>({
+      label: slugLabels[slug]||slug,
+      data: months.map(m=>{const r=quality.find(q=>q.month===m&&q.slug===slug);return r?r.total:0;}),
+      backgroundColor: (slugColors[slug]||'#9ca3af')+'bb',
+      borderColor: slugColors[slug]||'#9ca3af', borderWidth:1,
+    }));
+    S.charts.quality=new Chart(document.getElementById('chart-quality'),{type:'bar',data:{labels:months.map(m=>monthLabels[m]||m),datasets:qualityDatasets},options:{responsive:true,plugins:{legend:{position:'bottom'}},scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true,ticks:{precision:0}}}}});
+
+    // Pizza categorias de resolução — mês atual
+    const catColors = resCats.map(c=>slugColors[c.slug]||'#9ca3af');
+    S.charts.rescats=new Chart(document.getElementById('chart-rescats'),{type:'doughnut',data:{labels:resCats.map(c=>c.label),datasets:[{data:resCats.map(c=>c.total),backgroundColor:catColors,hoverOffset:4}]},options:{responsive:true,plugins:{legend:{position:'bottom'}}}});
   } catch(e){toast(e.message,false);}
 }
 
@@ -739,9 +925,9 @@ async function renderAdminTickets(page=1) {
           <label style="display:flex;align-items:center;gap:5px;font-size:13px"><input type="checkbox" ${adminFilters.unassigned?'checked':''} onchange="adminFilters.unassigned=this.checked;renderAdminTickets(1)"> Sem responsável</label>
         </div></div>
         <div class="table-wrap"><table><thead><tr>
-          <th>#</th><th>Usuário</th><th>Departamento</th><th>Serviço</th><th>Status</th><th>Responsável</th><th>Atribuição</th><th>SLA</th><th>Aberto em</th><th></th>
+          <th>#</th><th>Usuário</th><th>Departamento</th><th>Serviço</th><th>Status</th><th>Responsável</th><th>Atribuição</th><th>SLA</th><th>Reab.</th><th>Aberto em</th><th></th>
         </tr></thead><tbody>
-        ${!rows.length?`<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:32px">Nenhum chamado</td></tr>`:
+        ${!rows.length?`<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:32px">Nenhum chamado</td></tr>`:
         rows.map(t=>`<tr class="${t.sla_breached==1||t.is_priority==1?'row-alert':''}">
           <td><b>#${t.id}</b></td><td>${t.user_name}</td><td>${t.department_name}</td>
           <td>${t.service_name}${t.is_priority==1?' 🔥':''}</td>
@@ -749,6 +935,7 @@ async function renderAdminTickets(page=1) {
           <td>${t.attendant_name?`<div style="line-height:1.4">${t.attendant_name}<br>${profileBadge(t.attendant_profile)}</div>`:'<span style="color:var(--danger);font-weight:700">⚠ Sem responsável</span>'}</td>
           <td>${assignmentBadge(t)}</td>
           <td style="${t.sla_breached==1?'color:var(--danger);font-weight:700':''}">${slaBadge(t)}</td>
+          <td>${t.reopen_count>0?`<span class="badge badge-duplicate" title="${t.reopen_count}x reaberto">${t.reopen_count}×</span>`:'—'}</td>
           <td>${fmt(t.created_at)}</td>
           <td><button class="action-btn" onclick="viewTicket(${t.id},true)">Gerenciar</button></td>
         </tr>`).join('')}
@@ -790,16 +977,130 @@ async function toggleAvailability(userId,current){
 }
 
 // ── TICKET DETAIL ─────────────────────────────────────────────────────────────
-async function viewTicket(id,isAdmin=false){
+function resCatBadge(slug, label) {
+  const cls = { resolved:'badge-resolved-cat', not_reproducible:'badge-not_reproducible', duplicate:'badge-duplicate', cancelled_by_user:'badge-cancelled_by_user' };
+  return `<span class="badge ${cls[slug]||'badge-closed'}">${label||slug}</span>`;
+}
+
+async function viewTicket(id, isAdmin=false) {
   openModal('Carregando...','<div style="padding:40px;text-align:center">Carregando...</div>','');
-  try{
-    const t=await api(`/tickets.php?id=${id}`);
-    const hist=(t.history||[]).map(h=>`<div class="history-item"><div class="h-meta">${h.changed_by_name} — ${fmt(h.created_at)}</div><div class="h-body"><b>${fieldLabel(h.field_changed)}:</b> ${h.old_value||'—'} → ${h.new_value||'—'}</div></div>`).join('')||'<p style="color:var(--text-muted)">Sem histórico</p>';
-    const atts=(t.attachments||[]).map(a=>`<a href="${a.file_path}" target="_blank" class="upload-item" style="text-decoration:none">📎 ${a.file_name} <span style="color:var(--text-muted)">(${(a.size_bytes/1024).toFixed(0)} KB)</span></a>`).join('')||'<p style="color:var(--text-muted)">Sem anexos</p>';
-    document.getElementById('modal-title').textContent=`Chamado #${t.id}`;
-    document.getElementById('modal-body').innerHTML=`
+  try {
+    const t = await api(`/tickets.php?id=${id}`);
+    const isClosed  = ['resolved','closed'].includes(t.status);
+    const isOpen    = ['open','in_progress'].includes(t.status);
+    const isUser    = S.user.role !== 'admin';
+
+    // ── History ──────────────────────────────────────────────────────────────
+    const hist = (t.history||[]).map(h =>
+      `<div class="history-item"><div class="h-meta">${h.changed_by_name} — ${fmt(h.created_at)}</div>
+       <div class="h-body"><b>${fieldLabel(h.field_changed)}:</b> ${h.old_value||'—'} → ${h.new_value||'—'}</div></div>`
+    ).join('') || '<p style="color:var(--text-muted)">Sem histórico</p>';
+
+    // ── Attachments ───────────────────────────────────────────────────────────
+    const atts = (t.attachments||[]).map(a =>
+      `<a href="${a.file_path}" target="_blank" class="upload-item" style="text-decoration:none">
+        📎 ${a.file_name} <span style="color:var(--text-muted)">(${(a.size_bytes/1024).toFixed(0)} KB)</span>
+      </a>`
+    ).join('') || '<p style="color:var(--text-muted)">Sem anexos</p>';
+
+    // ── Reopen banner (user view) ─────────────────────────────────────────────
+    let reopenBanner = '';
+    if (isUser && isClosed) {
+      if (t.resolution_slug === 'duplicate' && t.duplicate_of) {
+        reopenBanner = `<div class="reopen-banner duplicate-warn">
+          <span>⚠ Este chamado foi fechado como duplicado de <b>#${t.duplicate_of}</b>.
+          Para reabrir, acesse o chamado original.</span>
+          <button class="btn btn-warning btn-sm" onclick="closeModal();viewTicket(${t.duplicate_of})">Ver original →</button>
+        </div>`;
+      } else if (t.reopen_deadline && new Date(t.reopen_deadline) > new Date()) {
+        const deadlineStr = new Date(t.reopen_deadline).toLocaleDateString('pt-BR');
+        reopenBanner = `<div class="reopen-banner can-reopen">
+          <span>✅ Chamado resolvido em ${fmt(t.last_closed_at||t.resolved_at)}.
+          Você pode reabrir até <b>${deadlineStr}</b>.</span>
+          <button class="btn btn-success btn-sm" onclick="openReopenModal(${t.id})">Reabrir Chamado</button>
+        </div>`;
+      } else if (isClosed) {
+        const expStr = t.reopen_deadline ? new Date(t.reopen_deadline).toLocaleDateString('pt-BR') : '';
+        reopenBanner = `<div class="reopen-banner expired">
+          <span style="color:var(--text-muted)">${expStr ? `O prazo de reabertura expirou em ${expStr}.` : 'Chamado fechado.'}
+          Se o problema persistir, abra um novo chamado.</span>
+          <button class="btn btn-outline btn-sm" onclick="closeModal();navigate('new-ticket')">Abrir novo chamado</button>
+        </div>`;
+      }
+    }
+
+    // ── Admin: duplicate warning banner ──────────────────────────────────────
+    let dupWarning = '';
+    if (t.duplicate_of) {
+      dupWarning = `<div style="background:color-mix(in srgb,var(--warning) 12%,white);border:1px solid color-mix(in srgb,var(--warning) 30%,white);padding:10px 14px;border-radius:var(--radius);margin-bottom:14px;font-size:13px">
+        ⚠ Este chamado é duplicado de <b>#${t.duplicate_of}</b>.
+        ${isAdmin?`<button class="action-btn" onclick="viewTicket(${t.duplicate_of},true)">Ver original →</button>`:''}
+      </div>`;
+    }
+
+    // ── Reopen count badge ────────────────────────────────────────────────────
+    const reopenBadge = t.reopen_count > 0
+      ? `<span class="badge badge-duplicate" title="Reaberto ${t.reopen_count}x">${t.reopen_count}× Reaberto</span>` : '';
+
+    // ── Resolution section (when closed) ────────────────────────────────────
+    let resSection = '';
+    if (isClosed && t.resolution_slug) {
+      resSection = `<div style="margin-bottom:16px;padding:14px;background:var(--gray-50);border-radius:var(--radius);border:1px solid var(--gray-100)">
+        <div style="font-size:13px;font-weight:700;margin-bottom:10px">Resolução</div>
+        <div class="detail-grid">
+          <div class="detail-item"><div class="di-label">Categoria</div><div class="di-val">${resCatBadge(t.resolution_slug, t.resolution_label)}${reopenBadge?` ${reopenBadge}`:''}</div></div>
+          <div class="detail-item"><div class="di-label">Fechado em</div><div class="di-val">${fmt(t.last_closed_at||t.resolved_at)}</div></div>
+          ${t.resolution_notes?`<div class="detail-item full"><div class="di-label">Notas</div><div class="di-val" style="white-space:pre-wrap">${t.resolution_notes}</div></div>`:''}
+          ${t.duplicate_of?`<div class="detail-item full"><div class="di-label">Chamado original</div><div class="di-val">${isAdmin?`<button class="action-btn" onclick="viewTicket(${t.duplicate_of},${isAdmin})">#${t.duplicate_of} →</button>`:`#${t.duplicate_of}`}</div></div>`:''}
+        </div>
+      </div>`;
+    }
+
+    // ── Relations section (admin only) ────────────────────────────────────────
+    let relSection = '';
+    if (isAdmin) {
+      const rels = t.relations || [];
+      const relItems = rels.map(r => {
+        const typeCls = r.relation_type === 'duplicate' ? 'rel-type-duplicate' : 'rel-type-related';
+        const typeLabel = r.relation_type === 'duplicate' ? 'Duplicado' : 'Relacionado';
+        return `<div class="relation-item">
+          <span class="rel-type-tag ${typeCls}">${typeLabel}</span>
+          <span style="flex:1"><b>#${r.related_id}</b> — ${r.service_name} — ${r.user_name} — ${statusBadge(r.related_status)}</span>
+          <button class="action-btn" onclick="viewTicket(${r.related_id},true)">Ver</button>
+          <button class="action-btn" style="color:var(--danger)" onclick="removeRelation(${id},${r.related_id},this)">✕</button>
+        </div>`;
+      }).join('');
+      relSection = `<div style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <span style="font-size:13px;font-weight:700">Chamados Relacionados</span>
+          <button class="btn btn-outline btn-sm" onclick="openLinkModal(${id})">+ Vincular</button>
+        </div>
+        ${rels.length
+          ? `<div class="relations-list">${relItems}</div>`
+          : `<p style="font-size:13px;color:var(--text-muted)">Nenhum vínculo. Use "+ Vincular" para associar chamados relacionados ou duplicados.</p>`}
+      </div>`;
+    }
+
+    // ── Admin status controls (only open/in_progress options) ────────────────
+    const adminControls = isAdmin ? `<div style="margin-bottom:16px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:8px">Alterar Status</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <select id="m-status" class="form-control" style="width:auto">
+          ${['open','in_progress'].map(s=>`<option value="${s}" ${t.status===s?'selected':''}>${{open:'Aberto',in_progress:'Em andamento'}[s]}</option>`).join('')}
+        </select>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="m-priority" ${t.is_priority==1?'checked':''}> Prioritário</label>
+      </div>
+      <div class="form-group" style="margin-top:10px">
+        <label class="form-label">Observação</label>
+        <textarea id="m-obs" class="form-control" rows="3" placeholder="Adicione uma observação..."></textarea>
+      </div>
+    </div>` : '';
+
+    document.getElementById('modal-title').textContent = `Chamado #${t.id}`;
+    document.getElementById('modal-body').innerHTML = `
+      ${reopenBanner}${dupWarning}
       <div class="detail-grid" style="margin-bottom:20px">
-        <div class="detail-item"><div class="di-label">Status</div><div class="di-val">${statusBadge(t.status)}</div></div>
+        <div class="detail-item"><div class="di-label">Status</div><div class="di-val">${statusBadge(t.status)} ${t.reopen_count>0&&!isClosed?reopenBadge:''}</div></div>
         <div class="detail-item"><div class="di-label">Prioridade</div><div class="di-val">${t.is_priority==1?'🔥 Prioritário':'Normal'}</div></div>
         <div class="detail-item"><div class="di-label">Departamento</div><div class="di-val">${t.department_name}</div></div>
         <div class="detail-item"><div class="di-label">Serviço</div><div class="di-val">${t.service_name}</div></div>
@@ -807,35 +1108,138 @@ async function viewTicket(id,isAdmin=false){
         <div class="detail-item"><div class="di-label">Prazo SLA</div><div class="di-val" style="${t.sla_breached==1?'color:var(--danger);font-weight:700':''}">${slaBadge(t)}</div></div>
         <div class="detail-item"><div class="di-label">Responsável</div><div class="di-val">
           ${t.attendant_name?`${t.attendant_name} ${profileBadge(t.attendant_profile)} ${assignmentBadge(t)}`:'<span style="color:var(--danger)">⚠ Sem responsável</span>'}
-          ${isAdmin?`<button class="action-btn" style="margin-left:8px" onclick="openReassignModal(${t.id},'${t.attendant_name||''}')">Reatribuir</button>`:''}
+          ${isAdmin&&isOpen?`<button class="action-btn" style="margin-left:8px" onclick="openReassignModal(${t.id},'${t.attendant_name||''}')">Reatribuir</button>`:''}
         </div></div>
         <div class="detail-item"><div class="di-label">Aberto em</div><div class="di-val">${fmt(t.created_at)}</div></div>
         ${t.priority_reason?`<div class="detail-item full"><div class="di-label">Motivo da Prioridade</div><div class="di-val">${t.priority_reason}</div></div>`:''}
         <div class="detail-item full"><div class="di-label">Descrição</div><div class="di-val" style="white-space:pre-wrap">${t.description}</div></div>
       </div>
+      ${resSection}
       <div style="margin-bottom:16px"><div style="font-size:13px;font-weight:700;margin-bottom:8px">Anexos</div><div class="upload-list">${atts}</div></div>
-      ${isAdmin?`<div style="margin-bottom:16px">
-        <div style="font-size:13px;font-weight:700;margin-bottom:8px">Alterar Status</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <select id="m-status" class="form-control" style="width:auto">
-            ${['open','in_progress','resolved','closed'].map(s=>`<option value="${s}" ${t.status===s?'selected':''}>${{open:'Aberto',in_progress:'Em andamento',resolved:'Resolvido',closed:'Fechado'}[s]}</option>`).join('')}
-          </select>
-          <label style="display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="m-priority" ${t.is_priority==1?'checked':''}> Marcar como prioritário</label>
-        </div>
-        <div class="form-group" style="margin-top:10px"><label class="form-label">Observação</label><textarea id="m-obs" class="form-control" rows="3" placeholder="Adicione uma observação..."></textarea></div>
-      </div>`:''}
+      ${isAdmin && isOpen ? adminControls : ''}
+      ${relSection}
       <div><div style="font-size:13px;font-weight:700;margin-bottom:8px">Histórico</div>${hist}</div>`;
-    document.getElementById('modal-footer').innerHTML=isAdmin
-      ?`<button class="btn btn-outline" onclick="closeModal()">Fechar</button><button class="btn btn-primary" onclick="saveTicket(${t.id})">Salvar Alterações</button>`
-      :`<button class="btn btn-primary" onclick="closeModal()">Fechar</button>`;
-  }catch(e){toast(e.message,false);closeModal();}
+
+    // ── Footer ────────────────────────────────────────────────────────────────
+    if (isAdmin) {
+      let footerHtml = `<button class="btn btn-outline" onclick="closeModal()">Fechar</button>`;
+      if (isOpen) {
+        footerHtml += `<button class="btn btn-primary" onclick="saveTicket(${t.id})">Salvar Alterações</button>`;
+        footerHtml += `<button class="btn btn-success" onclick="openResolveModal(${t.id})">Fechar Chamado</button>`;
+      }
+      if (isClosed && isFullAdmin()) {
+        footerHtml += `<button class="btn btn-warning" onclick="openReopenModal(${t.id},true)">Forçar Reabertura</button>`;
+      }
+      document.getElementById('modal-footer').innerHTML = footerHtml;
+    } else {
+      document.getElementById('modal-footer').innerHTML = `<button class="btn btn-primary" onclick="closeModal()">Fechar</button>`;
+    }
+  } catch(e) { toast(e.message, false); closeModal(); }
+}
+
+// ── REOPEN MODAL ──────────────────────────────────────────────────────────────
+function openReopenModal(id, forceAdmin=false) {
+  openModal(forceAdmin ? `Forçar Reabertura #${id}` : `Reabrir Chamado #${id}`,
+    `<div style="margin-bottom:14px;font-size:13px;color:var(--text-muted)">
+      ${forceAdmin ? 'Como administrador, você pode reabrir este chamado independente do prazo.' : 'Descreva o que aconteceu para que possamos continuar o atendimento.'}
+    </div>
+    <div class="form-group">
+      <label class="form-label">Motivo da reabertura <span style="color:var(--danger)">*</span></label>
+      <textarea id="reopen-reason" class="form-control" rows="4" placeholder="Mínimo 20 caracteres..."></textarea>
+    </div>`,
+    `<button class="btn btn-outline" onclick="closeModal()">Cancelar</button>
+     <button class="btn btn-warning" onclick="doReopen(${id})">Reabrir</button>`
+  );
+}
+
+async function doReopen(id) {
+  const reason = document.getElementById('reopen-reason')?.value.trim() || '';
+  if (reason.length < 20) { toast('Mínimo 20 caracteres para o motivo', false); return; }
+  try {
+    await api(`/tickets.php?id=${id}&action=reopen`, { method:'PATCH', body: JSON.stringify({ reason }) });
+    toast('Chamado reaberto!');
+    closeModal();
+    if (S.view==='my-tickets')     renderMyTickets(myPage);
+    else if (S.view==='admin-tickets') renderAdminTickets(adminPage);
+  } catch(e) { toast(e.message, false); }
+}
+
+// ── LINK MODAL (criar vínculo) ────────────────────────────────────────────────
+function openLinkModal(ticketId) {
+  openModal(`Vincular Chamado #${ticketId}`,
+    `<div class="form-group">
+      <label class="form-label">Tipo de vínculo <span style="color:var(--danger)">*</span></label>
+      <select id="lk-type" class="form-control">
+        <option value="related">Relacionado</option>
+        <option value="duplicate">Duplicado</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Chamado <span style="color:var(--danger)">*</span></label>
+      <div class="autocomplete-wrap">
+        <input id="lk-search" class="form-control" placeholder="Buscar por #ID ou descrição..."
+          oninput="searchLinkTicket(this.value,${ticketId})"/>
+        <div id="lk-results" class="autocomplete-results" style="display:none"></div>
+      </div>
+      <input type="hidden" id="lk-id"/>
+      <div id="lk-sel" style="margin-top:5px;font-size:12px;color:var(--success);font-weight:700"></div>
+    </div>`,
+    `<button class="btn btn-outline" onclick="closeModal()">Cancelar</button>
+     <button class="btn btn-primary" onclick="doLink(${ticketId})">Vincular</button>`
+  );
+}
+
+let _lkTimer = null;
+function searchLinkTicket(q, excludeId) {
+  clearTimeout(_lkTimer);
+  const res = document.getElementById('lk-results');
+  if (!q.trim()) { res.style.display='none'; return; }
+  _lkTimer = setTimeout(async () => {
+    try {
+      const data = await api(`/tickets-search.php?q=${encodeURIComponent(q)}&excludeId=${excludeId}`);
+      const labels = {open:'Aberto',in_progress:'Em andamento',resolved:'Resolvido',closed:'Fechado'};
+      res.innerHTML = data.length
+        ? data.map(t=>`<div class="autocomplete-item" onclick="selectLinkTicket(${t.id},'${esc(t.service_name)} — ${esc(t.user_name)} — ${labels[t.status]||t.status}')"><b>#${t.id}</b> — ${esc(t.service_name)} — ${esc(t.user_name)} — ${statusBadge(t.status)}</div>`).join('')
+        : `<div class="autocomplete-item" style="color:var(--text-muted)">Nenhum chamado encontrado</div>`;
+      res.style.display='';
+    } catch {}
+  }, 300);
+}
+
+function selectLinkTicket(id, label) {
+  document.getElementById('lk-id').value    = id;
+  document.getElementById('lk-search').value = `#${id}`;
+  document.getElementById('lk-sel').textContent = `✓ Selecionado: #${id} — ${label}`;
+  document.getElementById('lk-results').style.display='none';
+}
+
+async function doLink(ticketId) {
+  const relatedId    = parseInt(document.getElementById('lk-id')?.value || 0);
+  const relationType = document.getElementById('lk-type')?.value;
+  if (!relatedId) { toast('Selecione um chamado', false); return; }
+  try {
+    await api(`/ticket-relations.php?id=${ticketId}`, { method:'POST', body: JSON.stringify({ relatedId, relationType }) });
+    toast('Chamados vinculados!');
+    closeModal();
+    viewTicket(ticketId, true);
+  } catch(e) { toast(e.message, false); }
+}
+
+async function removeRelation(ticketId, relatedId, btn) {
+  if (!confirm('Remover vínculo?')) return;
+  btn.disabled = true;
+  try {
+    await api(`/ticket-relations.php?id=${ticketId}&relatedId=${relatedId}`, { method:'DELETE' });
+    toast('Vínculo removido!');
+    viewTicket(ticketId, true);
+  } catch(e) { toast(e.message, false); btn.disabled=false; }
 }
 
 async function saveTicket(id){
   try{await api(`/tickets.php?id=${id}`,{method:'PATCH',body:JSON.stringify({status:document.getElementById('m-status').value,is_priority:document.getElementById('m-priority').checked,observation:document.getElementById('m-obs').value.trim()})});toast('Chamado atualizado!');closeModal();renderAdminTickets(adminPage);}catch(e){toast(e.message,false);}
 }
 
-function fieldLabel(f){return{status:'Status',is_priority:'Prioridade',observation:'Observação',assigned_to:'Responsável'}[f]||f;}
+function fieldLabel(f){return{status:'Status',is_priority:'Prioridade',observation:'Observação',assigned_to:'Responsável',resolution:'Resolução',reopen:'Reabertura',relations:'Chamados Relacionados'}[f]||f;}
 
 async function openReassignModal(ticketId,currentName){
   if (!S.attendants.length) try{S.attendants=await api('/admin/attendants.php');}catch{}
@@ -974,12 +1378,50 @@ function renderSettings() {
 
     </div>
 
+    </div>
+
+    <div style="max-width:900px;margin-top:20px" id="reopen-settings-card">
+      <div class="card">
+        <div class="card-header"><span class="card-title">🔄 Reabertura de Chamados</span></div>
+        <div class="card-body">
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">
+            Define o prazo máximo que o usuário tem para reabrir um chamado após o fechamento.
+            Alterações valem apenas para chamados fechados a partir de agora.
+          </p>
+          <div style="display:flex;align-items:center;gap:12px">
+            <label class="form-label" style="margin-bottom:0;white-space:nowrap">Prazo máximo:</label>
+            <input id="rs-days" type="number" min="1" max="365" class="form-control" style="width:90px" value="7"/>
+            <span style="font-size:13px;color:var(--text-muted)">dias após o fechamento</span>
+            <button class="btn btn-primary btn-sm" onclick="saveReopenSettings()">Salvar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div style="display:flex;gap:8px;margin-top:20px;max-width:900px">
-      <button class="btn btn-primary" onclick="saveSettings()">💾 Salvar Configurações</button>
+      <button class="btn btn-primary" onclick="saveSettings()">💾 Salvar Configurações de Aparência</button>
       <button class="btn btn-outline" onclick="resetTheme()">↩ Restaurar Padrões</button>
     </div>`;
 
   updateLogoPreview();
+  loadReopenSettings();
+}
+
+async function loadReopenSettings() {
+  try {
+    const rs = await api('/admin/reopen-settings.php');
+    const el = document.getElementById('rs-days');
+    if (el && rs.max_days_to_reopen) el.value = rs.max_days_to_reopen;
+  } catch {}
+}
+
+async function saveReopenSettings() {
+  const days = parseInt(document.getElementById('rs-days')?.value);
+  if (!days || days < 1) { toast('Informe um prazo válido (mínimo 1 dia)', false); return; }
+  try {
+    await api('/admin/reopen-settings.php', { method:'PATCH', body: JSON.stringify({ maxDays: days }) });
+    toast(`Prazo de reabertura atualizado para ${days} dias`);
+  } catch(e) { toast(e.message, false); }
 }
 
 function previewBranding() {
