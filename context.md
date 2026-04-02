@@ -9,21 +9,31 @@
 
 ```
 pjushelp/
-├── index.html                  SPA completo (frontend)
-├── context.md                  Este arquivo
+├── index.html                      SPA completo (frontend)
+├── context.md                      Este arquivo
 ├── api/
-│   ├── config.php              Conexão DB, helpers (respond, fail, me, admin, refreshSla)
-│   ├── setup.php               Cria tabelas + seed inicial (rodar 1x)
-│   ├── auth.php                POST login / DELETE logout / GET sessão atual
-│   ├── departments.php         GET departamentos; GET ?id=x&services=1
-│   ├── tickets.php             GET lista/detalhe | POST criar | PATCH atualizar
-│   ├── upload.php              POST anexo (imagem/PDF, máx 5 arquivos, 5 MB)
+│   ├── config.php                  Conexão DB, helpers (respond, fail, me, admin, refreshSla, autoAssign)
+│   ├── setup.php                   Cria tabelas + seed inicial (rodar 1x)
+│   ├── migrate.php                 Sprint 2: attendant_profiles, assignment_rules, attendant_availability
+│   ├── migrate2.php                Sprint 3: resolution_categories, reopen_settings, ticket_relations
+│   ├── auth.php                    POST login / DELETE logout / GET sessão atual
+│   ├── departments.php             GET departamentos; GET ?id=x&services=1
+│   ├── tickets.php                 GET lista/detalhe | POST criar | PATCH (status/assign/resolve/reopen)
+│   ├── ticket-relations.php        GET/POST/DELETE vínculos entre chamados
+│   ├── tickets-search.php          GET busca de chamados (autocomplete, admin only)
+│   ├── resolution-categories.php   GET categorias de resolução ativas
+│   ├── upload.php                  POST anexo (imagem/PDF, máx 5 arquivos, 5 MB)
+│   ├── my-queue.php                GET fila do atendente logado
+│   ├── theme.php                   GET/POST configurações de aparência (white-label)
 │   └── admin/
-│       ├── metrics.php         GET métricas dashboard (main / monthly / by-dept)
-│       ├── priority-rules.php  CRUD regras de prioridade
-│       └── services.php        CRUD serviços por departamento
-└── uploads/                    Arquivos enviados pelos usuários (criado pelo setup)
-    └── .htaccess               Bloqueia execução de PHP
+│       ├── metrics.php             GET métricas (main / monthly / by-dept / resolution-cats / quality)
+│       ├── queue.php               GET fila admin com filtros
+│       ├── attendants.php          GET workload | PATCH toggle disponibilidade
+│       ├── reopen-settings.php     GET/PATCH prazo de reabertura
+│       ├── priority-rules.php      CRUD regras de prioridade
+│       └── services.php            CRUD serviços por departamento
+└── uploads/                        Arquivos enviados pelos usuários
+    └── .htaccess                   Bloqueia execução de PHP
 ```
 
 ---
@@ -333,13 +343,82 @@ Executar imediatamente após salvar o ticket, nesta ordem:
 
 ---
 
-## 9. Regras de Negócio a Implementar
+## 9. Sprint 3 — Ciclo de Vida Pós-Fechamento (implementado)
+
+### Novas tabelas
+
+| Tabela | Descrição |
+|---|---|
+| `resolution_categories` | 4 slugs: `resolved`, `not_reproducible`, `duplicate`, `cancelled_by_user` |
+| `reopen_settings` | Prazo máximo em dias para reabertura (padrão: 7 dias) |
+| `ticket_relations` | Vínculos bidirecionais entre chamados (`related` ou `duplicate`) |
+
+### Novas colunas em `tickets`
+
+| Coluna | Tipo | Descrição |
+|---|---|---|
+| `resolution_category_id` | INT FK | Obrigatório ao fechar |
+| `resolution_notes` | TEXT | Obrigatório para `not_reproducible` e `duplicate` |
+| `duplicate_of` | INT FK → tickets | Atalho para o chamado original |
+| `reopen_count` | INT | Quantas vezes foi reaberto |
+| `last_closed_at` | TIMESTAMP | Base para calcular prazo de reabertura |
+| `reopen_deadline` | TIMESTAMP | `last_closed_at + max_days_to_reopen` |
+
+### Endpoints novos
+
+| Método | Endpoint | Quem | Descrição |
+|---|---|---|---|
+| PATCH | `/tickets.php?id=X&action=resolve` | admin/atendente | Fecha com categoria; cria relação se duplicado; fecha duplicados em lote |
+| PATCH | `/tickets.php?id=X&action=reopen` | dono do chamado ou admin | Reabre; valida prazo e slug != duplicate para usuário comum |
+| GET | `/ticket-relations.php?id=X` | admin | Lista vínculos |
+| POST | `/ticket-relations.php?id=X` | admin | Cria vínculo bidirecional |
+| DELETE | `/ticket-relations.php?id=X&relatedId=Y` | admin | Remove vínculo bidirecional |
+| GET | `/tickets-search.php?q=&excludeId=` | admin | Autocomplete para vincular chamados |
+| GET | `/resolution-categories.php` | logado | Lista categorias ativas |
+| GET | `/admin/reopen-settings.php` | fullAdmin | Lê configuração de prazo |
+| PATCH | `/admin/reopen-settings.php` | fullAdmin | Atualiza prazo (body: `{maxDays}`) |
+| GET | `/admin/metrics.php?type=resolution-cats` | admin | Pizza: categorias do mês atual |
+| GET | `/admin/metrics.php?type=quality` | admin | Barras empilhadas: qualidade por mês |
+
+### Regras de negócio
+
+- `resolution_category_id` obrigatório em todo fechamento via `action=resolve`
+- `resolution_notes` obrigatório (≥ 20 chars) quando slug é `not_reproducible` ou `duplicate`
+- Fechamento como `duplicate` exige `duplicateOfId` e cria registro bidirecional em `ticket_relations`
+- Fechamento em lote: ao fechar um chamado com duplicados abertos vinculados, o modal exibe checklist para fechar todos juntos
+- Reabertura: apenas o dono do chamado pode reabrir; bloqueado se slug = `duplicate` ou prazo expirou; admin pode forçar sem restrições
+- Vínculos são bidirecionais — ao criar `(A→B)`, cria-se também `(B→A)` na mesma transação
+- `reopen_count` incrementado a cada reabertura; exibido como badge âmbar na fila admin
+
+### Frontend (Sprint 3)
+
+- **Modal de resolução**: categoria obrigatória, autocomplete para chamado original (se duplicado), notas condicionais, checklist de fechamento em lote
+- **Detalhe do chamado — admin**: seção "Chamados Relacionados" com [+ Vincular] e remoção; "Fechar Chamado" substitui o dropdown para `resolved/closed`; "Forçar Reabertura" para full admin
+- **Detalhe do chamado — usuário**: banner contextual (pode reabrir / duplicado / prazo expirado) com botão de ação
+- **Dashboard**: 6 cards (+ Reaberturas + Taxa de Reabertura); gráfico "Qualidade de Resolução" (barras empilhadas); pizza categorias
+- **Fila admin**: coluna "Reab." com badge âmbar quando `reopen_count > 0`
+- **Aparência & White Label**: nova seção "Reabertura de Chamados" para configurar o prazo
+
+---
+
+## 10. Regras de Negócio Gerais
+
+- `sla_hours` é snapshot — nunca recalculado após abertura do chamado
+- `sla_breached` atualizado a cada request via `refreshSla()`
+- `ticket_history` gravado a cada mudança de status, atribuição, resolução, reabertura ou vínculo
+- Prioridade avaliada na abertura contra todas as `priority_rules` ativas
+- Chamado prioritário **ou** com SLA vencido → linha destacada (fundo avermelhado)
+- Uploads: máx. 5 arquivos por chamado, 5 MB total, só imagem ou PDF
+- Senhas: bcrypt | Autenticação: sessão PHP (`session_name('HELPDESK')`)
+
+---
+
+## 11. Melhorias Futuras
 
 - Reatribuição apenas por admin — atendente não pode transferir chamado
-- Ao ser atribuído, atendente recebe notificação (e-mail ou push) com link direto
-- Se serviço não tiver `assignment_rule`, atribuir para menor carga e sinalizar no admin que a regra está faltando
-- Se todos os atendentes do perfil correto estiverem no limite de `max_open_tickets`: chamado entra sem responsável (destaque especial no painel admin)
-- Chamados já atribuídos a atendente marcado como indisponível permanecem com ele (não são reatribuídos automaticamente)
+- Notificação por e-mail ao atendente na atribuição
+- Se serviço não tiver `assignment_rule`, sinalizar no admin
+- Chamados já atribuídos a atendente indisponível permanecem com ele (sem reatribuição automática)
 
 ---
 
