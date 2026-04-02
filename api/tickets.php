@@ -20,13 +20,16 @@ switch ($method) {
                        d.name   AS department_name,
                        sv.name  AS service_name,
                        att.name AS attendant_name,
-                       ap.name  AS attendant_profile
+                       ap.name  AS attendant_profile,
+                       rc.slug  AS resolution_slug,
+                       rc.label AS resolution_label
                 FROM tickets t
                 JOIN users       u   ON u.id   = t.user_id
                 JOIN departments d   ON d.id   = t.department_id
                 JOIN services    sv  ON sv.id  = t.service_id
-                LEFT JOIN users           att ON att.id = t.assigned_to
-                LEFT JOIN attendant_profiles ap ON ap.id = att.attendant_profile_id
+                LEFT JOIN users               att ON att.id = t.assigned_to
+                LEFT JOIN attendant_profiles  ap  ON ap.id  = att.attendant_profile_id
+                LEFT JOIN resolution_categories rc ON rc.id  = t.resolution_category_id
                 WHERE t.id = ?
             ");
             $s->execute([$id]);
@@ -37,7 +40,7 @@ switch ($method) {
             $h = $db->prepare("
                 SELECT th.*, u.name AS changed_by_name
                 FROM ticket_history th JOIN users u ON u.id = th.changed_by
-                WHERE th.ticket_id = ? ORDER BY th.created_at DESC
+                WHERE th.ticket_id = ? ORDER BY th.created_at ASC
             ");
             $h->execute([$id]);
             $t['history'] = $h->fetchAll();
@@ -45,6 +48,25 @@ switch ($method) {
             $a = $db->prepare("SELECT * FROM ticket_attachments WHERE ticket_id = ?");
             $a->execute([$id]);
             $t['attachments'] = $a->fetchAll();
+
+            // Relações — apenas para admins/atendentes
+            if ($user['role'] === 'admin') {
+                $rel = $db->prepare("
+                    SELECT tr.id, tr.relation_type, tr.created_at,
+                           t2.id     AS related_id,
+                           t2.status AS related_status,
+                           sv2.name  AS service_name,
+                           u2.name   AS user_name
+                    FROM ticket_relations tr
+                    JOIN tickets  t2   ON t2.id  = tr.related_id
+                    JOIN services sv2  ON sv2.id = t2.service_id
+                    JOIN users    u2   ON u2.id  = t2.user_id
+                    WHERE tr.ticket_id = ?
+                    ORDER BY tr.created_at DESC
+                ");
+                $rel->execute([$id]);
+                $t['relations'] = $rel->fetchAll();
+            }
 
             respond($t);
         }
@@ -157,8 +179,150 @@ switch ($method) {
     // ── PATCH ────────────────────────────────────────────────────────────────
     case 'PATCH':
         if (!$id) fail('ID não informado');
+        $b = body();
+
+        // ── Reabertura — acessível pelo dono do chamado ou admin ──────────
+        if ($action === 'reopen') {
+            $currentUser = me();
+            $reason      = trim($b['reason'] ?? '');
+            if (mb_strlen($reason) < 20) fail('Motivo da reabertura deve ter no mínimo 20 caracteres');
+
+            $tStmt = $db->prepare("
+                SELECT t.*, rc.slug AS resolution_slug
+                FROM tickets t
+                LEFT JOIN resolution_categories rc ON rc.id = t.resolution_category_id
+                WHERE t.id = ?
+            ");
+            $tStmt->execute([$id]);
+            $ticket = $tStmt->fetch();
+            if (!$ticket) fail('Chamado não encontrado', 404);
+            if (!in_array($ticket['status'], ['resolved','closed'])) fail('Chamado não está fechado');
+
+            $isAdminUser = $currentUser['role'] === 'admin';
+
+            if (!$isAdminUser) {
+                if ($ticket['user_id'] != $currentUser['id']) fail('Acesso negado', 403);
+                if ($ticket['resolution_slug'] === 'duplicate') {
+                    fail('Chamados duplicados não podem ser reabertos. Acesse o chamado original para reabrir.', 403);
+                }
+                if ($ticket['reopen_deadline'] && strtotime($ticket['reopen_deadline']) < time()) {
+                    $exp = date('d/m/Y', strtotime($ticket['reopen_deadline']));
+                    fail("O prazo para reabertura expirou em $exp. Abra um novo chamado se o problema persistir.", 403);
+                }
+            }
+
+            $db->prepare("
+                UPDATE tickets SET
+                    status          = 'open',
+                    reopen_count    = reopen_count + 1,
+                    last_closed_at  = NULL,
+                    reopen_deadline = NULL
+                WHERE id = ?
+            ")->execute([$id]);
+
+            $db->prepare(
+                "INSERT INTO ticket_history (ticket_id,changed_by,field_changed,old_value,new_value) VALUES (?,?,'reopen',?,?)"
+            )->execute([$id, $currentUser['id'], $ticket['status'], $reason]);
+
+            respond(['ok' => true]);
+        }
+
         $adm = admin();
-        $b   = body();
+
+        // ── Resolução / Fechamento ────────────────────────────────────────
+        if ($action === 'resolve') {
+            $catId   = (int)($b['resolutionCategoryId'] ?? 0);
+            $notes   = trim($b['resolutionNotes']       ?? '');
+            $dupOfId = (int)($b['duplicateOfId']        ?? 0);
+            $status  = in_array($b['status'] ?? '', ['resolved','closed']) ? $b['status'] : 'closed';
+
+            $tStmt = $db->prepare("SELECT * FROM tickets WHERE id = ?");
+            $tStmt->execute([$id]);
+            $ticket = $tStmt->fetch();
+            if (!$ticket) fail('Chamado não encontrado', 404);
+            if (!in_array($ticket['status'], ['open','in_progress'])) fail('Chamado não está aberto ou em andamento');
+
+            // Atendente só pode fechar seus próprios chamados
+            if (!empty($adm['attendant_profile_id']) && $ticket['assigned_to'] != $adm['id']) {
+                fail('Você só pode fechar chamados atribuídos a você', 403);
+            }
+
+            $catStmt = $db->prepare("SELECT * FROM resolution_categories WHERE id = ? AND is_active = 1");
+            $catStmt->execute([$catId]);
+            $cat = $catStmt->fetch();
+            if (!$cat) fail('Categoria de resolução inválida ou inativa');
+
+            if (in_array($cat['slug'], ['not_reproducible','duplicate']) && mb_strlen($notes) < 20) {
+                fail('Observações obrigatórias (mínimo 20 caracteres) para esta categoria');
+            }
+
+            if ($cat['slug'] === 'duplicate') {
+                if (!$dupOfId) fail('Informe o chamado original (duplicateOfId)');
+                if ($dupOfId == $id) fail('Um chamado não pode ser duplicado de si mesmo');
+                $chk = $db->prepare("SELECT id FROM tickets WHERE id = ?");
+                $chk->execute([$dupOfId]);
+                if (!$chk->fetch()) fail('Chamado original não encontrado');
+            }
+
+            $maxDays = (int)($db->query("SELECT max_days_to_reopen FROM reopen_settings LIMIT 1")->fetchColumn() ?: 7);
+
+            $db->prepare("
+                UPDATE tickets SET
+                    status                 = ?,
+                    resolution_category_id = ?,
+                    resolution_notes       = ?,
+                    duplicate_of           = ?,
+                    resolved_at            = NOW(),
+                    last_closed_at         = NOW(),
+                    reopen_deadline        = DATE_ADD(NOW(), INTERVAL ? DAY)
+                WHERE id = ?
+            ")->execute([
+                $status,
+                $catId,
+                $notes ?: null,
+                $cat['slug'] === 'duplicate' ? $dupOfId : null,
+                $maxDays,
+                $id,
+            ]);
+
+            // Cria relação de duplicado
+            if ($cat['slug'] === 'duplicate' && $dupOfId) {
+                try {
+                    $ins = $db->prepare(
+                        "INSERT INTO ticket_relations (ticket_id,related_id,relation_type,created_by) VALUES (?,?,?,?)"
+                    );
+                    $ins->execute([$id, $dupOfId, 'duplicate', $adm['id']]);
+                    $ins->execute([$dupOfId, $id, 'duplicate', $adm['id']]);
+                } catch (PDOException $e) {} // ignora se já existe
+            }
+
+            $histVal = $cat['label'] . ($notes ? ": $notes" : '');
+            $db->prepare(
+                "INSERT INTO ticket_history (ticket_id,changed_by,field_changed,old_value,new_value) VALUES (?,?,'resolution',?,?)"
+            )->execute([$id, $adm['id'], $ticket['status'], $histVal]);
+
+            // Fechamento em lote de duplicados vinculados
+            if (!empty($b['batchDuplicates']) && is_array($b['batchDuplicates'])) {
+                $batchCatId = $db->query("SELECT id FROM resolution_categories WHERE slug='duplicate' LIMIT 1")->fetchColumn();
+                foreach ($b['batchDuplicates'] as $dupTktId) {
+                    $dupTktId = (int)$dupTktId;
+                    if (!$dupTktId || $dupTktId === (int)$id) continue;
+                    $batchNotes = "Fechado em lote junto ao chamado #$id";
+                    $db->prepare("
+                        UPDATE tickets SET
+                            status = 'closed', resolution_category_id = ?, resolution_notes = ?,
+                            duplicate_of = ?, resolved_at = NOW(), last_closed_at = NOW(),
+                            reopen_deadline = DATE_ADD(NOW(), INTERVAL ? DAY)
+                        WHERE id = ? AND status IN ('open','in_progress')
+                    ")->execute([$batchCatId, $batchNotes, $id, $maxDays, $dupTktId]);
+                    $db->prepare(
+                        "INSERT INTO ticket_history (ticket_id,changed_by,field_changed,old_value,new_value) VALUES (?,?,'resolution',?,?)"
+                    )->execute([$dupTktId, $adm['id'], 'open', "Fechado em lote — duplicado de #$id"]);
+                }
+            }
+
+            respond(['ok' => true]);
+        }
 
         // ── Atribuição manual / reatribuição ──────────────────────────────
         if ($action === 'assign' || $action === 'reassign') {
